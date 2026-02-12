@@ -1,0 +1,2 @@
+-- Placeholder migration for Prompt 1.
+-- Seed data strategy is introduced in Prompt 2.

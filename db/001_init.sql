@@ -1,0 +1,2 @@
+-- Placeholder migration for Prompt 1.
+-- Full schema definitions are introduced in Prompt 2.

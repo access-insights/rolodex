@@ -1,0 +1,11 @@
+node_modules
+.DS_Store
+coverage
+playwright-report
+test-results
+.netlify
+*.local
+.env
+.env.*
+!.env.example
+apps/web/dist

@@ -1,0 +1,2 @@
+-- Placeholder migration for Prompt 1.
+-- Row-level security policies are introduced in Prompt 2.
