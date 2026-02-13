@@ -759,23 +759,7 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             and (
               $2 = ''
               or (
-                to_tsvector(
-                  'simple',
-                  concat_ws(
-                    ' ',
-                    coalesce(first_name, ''),
-                    coalesce(last_name, ''),
-                    coalesce(organization, ''),
-                    coalesce(role, ''),
-                    coalesce(internal_contact, ''),
-                    coalesce(referred_by, ''),
-                    coalesce(linkedin_profile_url, ''),
-                    coalesce(linkedin_company, ''),
-                    coalesce(linkedin_job_title, ''),
-                    coalesce(linkedin_location, ''),
-                    array_to_string(attributes::text[], ' ')
-                  )
-                ) @@ websearch_to_tsquery('simple', $2)
+                coalesce(search_document, ''::tsvector) @@ websearch_to_tsquery('simple', $2)
               )
               or exists (
                 select 1

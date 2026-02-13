@@ -26,9 +26,41 @@ alter table contacts
 
 create index if not exists contacts_attributes_idx on contacts using gin (attributes);
 
-create index if not exists contacts_search_vector_idx
-on contacts
-using gin (
+alter table contacts
+  add column if not exists search_document tsvector;
+
+create or replace function contacts_refresh_search_document()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.search_document :=
+    to_tsvector(
+      'simple',
+      coalesce(new.first_name, '') || ' ' ||
+      coalesce(new.last_name, '') || ' ' ||
+      coalesce(new.organization, '') || ' ' ||
+      coalesce(new.role, '') || ' ' ||
+      coalesce(new.internal_contact, '') || ' ' ||
+      coalesce(new.referred_by, '') || ' ' ||
+      coalesce(new.linkedin_profile_url, '') || ' ' ||
+      coalesce(new.linkedin_company, '') || ' ' ||
+      coalesce(new.linkedin_job_title, '') || ' ' ||
+      coalesce(new.linkedin_location, '') || ' ' ||
+      coalesce(array_to_string(new.attributes::text[], ' '), '')
+    );
+  return new;
+end;
+$$;
+
+drop trigger if exists contacts_search_document_trigger on contacts;
+create trigger contacts_search_document_trigger
+before insert or update on contacts
+for each row
+execute function contacts_refresh_search_document();
+
+update contacts
+set search_document =
   to_tsvector(
     'simple',
     coalesce(first_name, '') || ' ' ||
@@ -43,7 +75,11 @@ using gin (
     coalesce(linkedin_location, '') || ' ' ||
     coalesce(array_to_string(attributes::text[], ' '), '')
   )
-);
+where search_document is null;
+
+create index if not exists contacts_search_document_idx
+on contacts
+using gin (search_document);
 
 create index if not exists contact_phone_numbers_value_trgm_idx
 on contact_phone_numbers
