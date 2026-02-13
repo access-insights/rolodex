@@ -2,7 +2,7 @@ import { PublicClientApplication } from "@azure/msal-browser";
 
 const clientId = import.meta.env.VITE_AZURE_CLIENT_ID || "";
 const tenantId = import.meta.env.VITE_AZURE_TENANT_ID || "common";
-const redirectUri = import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin;
+const redirectUri = import.meta.env.VITE_AZURE_REDIRECT_URI || `${window.location.origin}/auth/popup-callback.html`;
 const postLogoutRedirectUri = import.meta.env.VITE_AZURE_POST_LOGOUT_REDIRECT_URI || `${window.location.origin}/login`;
 
 let msalInstance: PublicClientApplication | null = null;
