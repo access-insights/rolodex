@@ -34,6 +34,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       try {
         await msalInstance.initialize();
+        const redirectResult = await msalInstance.handleRedirectPromise();
+        if (redirectResult?.account) {
+          setUser({
+            id: redirectResult.account.homeAccountId,
+            email: redirectResult.account.username,
+            role: FALLBACK_ROLE
+          });
+          return;
+        }
+
         const accounts = msalInstance.getAllAccounts();
         const active = accounts[0];
         if (active) {
@@ -56,13 +66,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const response = await msalInstance.loginPopup({
+    await msalInstance.loginRedirect({
       scopes: ["openid", "profile", "email"],
-      redirectUri: `${window.location.origin}/auth/popup-callback.html`
+      redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || `${window.location.origin}/login`
     });
-    if (response.account) {
-      setUser({ id: response.account.homeAccountId, email: response.account.username, role: FALLBACK_ROLE });
-    }
   };
 
   const logout = async () => {
