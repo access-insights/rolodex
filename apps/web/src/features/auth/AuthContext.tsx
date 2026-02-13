@@ -20,6 +20,15 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const FALLBACK_ROLE: AppRole = "participant";
 
+const toAppRole = (claims: unknown): AppRole => {
+  const claimObject = claims as { roles?: unknown };
+  const roles = Array.isArray(claimObject?.roles) ? claimObject.roles : [];
+
+  if (roles.includes("admin")) return "admin";
+  if (roles.includes("creator")) return "creator";
+  return FALLBACK_ROLE;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser({
             id: redirectResult.account.homeAccountId,
             email: redirectResult.account.username,
-            role: FALLBACK_ROLE
+            role: toAppRole(redirectResult.account.idTokenClaims)
           });
           return;
         }
@@ -47,7 +56,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const accounts = msalInstance.getAllAccounts();
         const active = accounts[0];
         if (active) {
-          setUser({ id: active.homeAccountId, email: active.username, role: FALLBACK_ROLE });
+          setUser({
+            id: active.homeAccountId,
+            email: active.username,
+            role: toAppRole(active.idTokenClaims)
+          });
         }
       } finally {
         setIsLoading(false);
