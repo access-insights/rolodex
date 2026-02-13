@@ -56,7 +56,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const response = await msalInstance.loginPopup({ scopes: ["openid", "profile", "email"] });
+    const response = await msalInstance.loginPopup({
+      scopes: ["openid", "profile", "email"],
+      redirectUri: `${window.location.origin}/auth/popup-callback.html`
+    });
     if (response.account) {
       setUser({ id: response.account.homeAccountId, email: response.account.username, role: FALLBACK_ROLE });
     }
