@@ -22,7 +22,8 @@ test("login, open contact detail, add comment", async ({ page }) => {
               lastName: "Price",
               company: "Bright Path Advisors",
               contactType: "Advisor",
-              status: "Active"
+              status: "Active",
+              attributes: []
             }
           ]
         })
@@ -52,6 +53,7 @@ test("login, open contact detail, add comment", async ({ page }) => {
             linkedInCompany: null,
             linkedInJobTitle: null,
             linkedInLocation: null,
+            attributes: [],
             phones: [],
             emails: [],
             websites: [],

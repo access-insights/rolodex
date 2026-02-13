@@ -30,8 +30,8 @@ export function ContactsListPage() {
 
   const isAdmin = user?.role === "admin";
 
-  const loadContacts = async () => {
-    const result = await apiClient.listContacts();
+  const loadContacts = async (searchTerm = "") => {
+    const result = await apiClient.listContacts(searchTerm);
     if (!result.ok || !result.data) {
       setStatusMessage(result.error?.message || "Unable to load contacts.");
       setContacts([]);
@@ -44,11 +44,10 @@ export function ContactsListPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadContacts();
-    }, 0);
-
+      void loadContacts(search);
+    }, 250);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [search]);
 
   const filterValues = useMemo(() => {
     const unique = new Set<string>();
@@ -65,13 +64,8 @@ export function ContactsListPage() {
   }, [contacts, filterColumn]);
 
   const filteredContacts = useMemo(() => {
-    const text = search.trim().toLowerCase();
     return contacts
       .filter((contact) => (includeArchived ? true : contact.status !== "Archived"))
-      .filter((contact) => {
-        if (!text) return true;
-        return contact.firstName.toLowerCase().includes(text) || contact.lastName.toLowerCase().includes(text);
-      })
       .filter((contact) => {
         if (filterValue === "All") return true;
         if (filterColumn === "Type") return contact.contactType === filterValue;
@@ -83,7 +77,7 @@ export function ContactsListPage() {
         if (last !== 0) return last;
         return a.firstName.localeCompare(b.firstName);
       });
-  }, [contacts, filterColumn, filterValue, includeArchived, search]);
+  }, [contacts, filterColumn, filterValue, includeArchived]);
 
   const groupedByLetter = useMemo(() => {
     const groups = new Map<string, ContactListItem[]>();
@@ -183,7 +177,7 @@ export function ContactsListPage() {
       <div className="grid gap-4 rounded border border-border bg-surface p-4 lg:grid-cols-[1.5fr_1fr_1fr]">
         <section aria-label="Search and filters" className="space-y-2">
           <label className="block">
-            <span className="mb-1 block text-sm text-muted">Search by first or last name</span>
+            <span className="mb-1 block text-sm text-muted">Search all contact fields</span>
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="input" placeholder="Search" />
           </label>
 

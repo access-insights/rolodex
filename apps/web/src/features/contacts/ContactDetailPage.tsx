@@ -4,6 +4,7 @@ import { Modal } from "../../components/Modal";
 import { useAuth } from "../auth/AuthContext";
 import {
   apiClient,
+  type ContactAttribute,
   type ContactComment,
   type ContactDetail,
   type ContactMethod,
@@ -23,6 +24,7 @@ type ContactFormState = {
   referredBy: string;
   referredByContactId: string;
   linkedInProfileUrl: string;
+  attributes: ContactAttribute[];
   phones: ContactMethod[];
   emails: ContactMethod[];
   websites: ContactMethod[];
@@ -30,6 +32,18 @@ type ContactFormState = {
 
 const typeOptions: ContactType[] = ["Advisor", "Funder", "Partner", "Client", "General"];
 const statusOptions: ContactStatus[] = ["Active", "Prospect", "Inactive", "Archived"];
+const attributeOptions: ContactAttribute[] = [
+  "Academia",
+  "Accessible Education",
+  "Startup",
+  "Not for Profit",
+  "AgeTech",
+  "Robotics",
+  "AI Solutions",
+  "Consumer Products",
+  "Disability Services",
+  "Disability Community"
+];
 
 const emptyMethod = (): ContactMethod => ({ label: "", value: "" });
 
@@ -44,6 +58,7 @@ const toFormState = (detail: ContactDetail): ContactFormState => ({
   referredBy: detail.referredBy ?? "",
   referredByContactId: detail.referredByContactId ?? "",
   linkedInProfileUrl: detail.linkedInProfileUrl ?? "",
+  attributes: detail.attributes ?? [],
   phones: detail.phones.length > 0 ? detail.phones : [emptyMethod()],
   emails: detail.emails.length > 0 ? detail.emails : [emptyMethod()],
   websites: detail.websites.length > 0 ? detail.websites : [emptyMethod()]
@@ -214,6 +229,7 @@ export function ContactDetailPage() {
       referredBy: form.referredBy,
       referredByContactId: form.referredByContactId || undefined,
       linkedInProfileUrl: form.linkedInProfileUrl || undefined,
+      attributes: form.attributes,
       phones: form.phones.filter((entry) => entry.value.trim().length > 0),
       emails: form.emails.filter((entry) => entry.value.trim().length > 0),
       websites: form.websites.filter((entry) => entry.value.trim().length > 0)
@@ -395,6 +411,34 @@ export function ContactDetailPage() {
           <span className="mb-1 block text-sm text-muted">Referred By</span>
           <input className="input" value={form.referredBy} onChange={(event) => setForm({ ...form, referredBy: event.target.value })} disabled={!editing} />
         </label>
+      </section>
+
+      <section className="rounded border border-border bg-surface p-4" aria-label="Attributes">
+        <h2 className="text-xl font-semibold">Attributes</h2>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {attributeOptions.map((attribute) => (
+            <label key={attribute} className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.attributes.includes(attribute)}
+                disabled={!editing}
+                onChange={(event) =>
+                  setForm((prev) => {
+                    if (!prev) return prev;
+                    const set = new Set(prev.attributes);
+                    if (event.target.checked) {
+                      set.add(attribute);
+                    } else {
+                      set.delete(attribute);
+                    }
+                    return { ...prev, attributes: Array.from(set) };
+                  })
+                }
+              />
+              <span>{attribute}</span>
+            </label>
+          ))}
+        </div>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-3">

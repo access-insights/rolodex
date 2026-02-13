@@ -34,7 +34,8 @@ describe("Contacts list role behavior", () => {
           lastName: "Price",
           company: "Bright Path Advisors",
           contactType: "Advisor",
-          status: "Active"
+          status: "Active",
+          attributes: []
         }
       ]
     });

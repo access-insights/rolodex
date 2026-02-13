@@ -1,9 +1,21 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiClient, type ContactStatus, type ContactType } from "../../lib/apiClient";
+import { apiClient, type ContactAttribute, type ContactStatus, type ContactType } from "../../lib/apiClient";
 
 const typeOptions: ContactType[] = ["Advisor", "Funder", "Partner", "Client", "General"];
 const statusOptions: ContactStatus[] = ["Active", "Prospect", "Inactive", "Archived"];
+const attributeOptions: ContactAttribute[] = [
+  "Academia",
+  "Accessible Education",
+  "Startup",
+  "Not for Profit",
+  "AgeTech",
+  "Robotics",
+  "AI Solutions",
+  "Consumer Products",
+  "Disability Services",
+  "Disability Community"
+];
 
 export function ContactCreatePage() {
   const navigate = useNavigate();
@@ -14,6 +26,7 @@ export function ContactCreatePage() {
     setStatus("Submitting contact...");
 
     const formData = new FormData(event.currentTarget);
+    const attributes = attributeOptions.filter((attribute) => formData.get(`attr-${attribute}`) === "on");
     const result = await apiClient.createContact({
       firstName: String(formData.get("firstName") || ""),
       lastName: String(formData.get("lastName") || ""),
@@ -22,6 +35,7 @@ export function ContactCreatePage() {
       contactType: String(formData.get("contactType") || "General") as ContactType,
       status: String(formData.get("status") || "Prospect") as ContactStatus,
       linkedInProfileUrl: String(formData.get("linkedInProfileUrl") || "") || undefined,
+      attributes,
       phones: [],
       emails: [],
       websites: []
@@ -91,6 +105,18 @@ export function ContactCreatePage() {
           <span className="mb-1 block text-sm text-muted">LinkedIn Profile URL</span>
           <input name="linkedInProfileUrl" className="input" type="url" placeholder="https://www.linkedin.com/in/example" />
         </label>
+
+        <fieldset className="rounded border border-border p-3">
+          <legend className="px-1 text-sm font-semibold">Attributes</legend>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {attributeOptions.map((attribute) => (
+              <label key={attribute} className="inline-flex items-center gap-2">
+                <input type="checkbox" name={`attr-${attribute}`} />
+                <span>{attribute}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <button type="submit" className="btn">
           Save

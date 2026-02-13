@@ -11,6 +11,17 @@ export type ApiEnvelope<T> = {
 export type AppRole = "admin" | "creator" | "participant";
 export type ContactType = "Advisor" | "Funder" | "Partner" | "Client" | "General";
 export type ContactStatus = "Active" | "Prospect" | "Inactive" | "Archived";
+export type ContactAttribute =
+  | "Academia"
+  | "Accessible Education"
+  | "Startup"
+  | "Not for Profit"
+  | "AgeTech"
+  | "Robotics"
+  | "AI Solutions"
+  | "Consumer Products"
+  | "Disability Services"
+  | "Disability Community";
 
 export type ContactMethod = {
   id?: string;
@@ -51,6 +62,7 @@ export type ContactListItem = {
   linkedInCompany?: string | null;
   linkedInJobTitle?: string | null;
   linkedInLocation?: string | null;
+  attributes: ContactAttribute[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -90,6 +102,7 @@ export type ContactUpsertInput = {
   referredBy?: string;
   referredByContactId?: string;
   linkedInProfileUrl?: string;
+  attributes?: ContactAttribute[];
   phones?: ContactMethod[];
   emails?: ContactMethod[];
   websites?: ContactMethod[];
@@ -135,7 +148,8 @@ export const apiClient = {
       body: JSON.stringify({ userId, role })
     }),
 
-  listContacts: () => request<ContactListItem[]>("contact.list"),
+  listContacts: (search?: string) =>
+    request<ContactListItem[]>("contact.list", undefined, search ? { search } : {}),
   getContact: (id: string) => request<ContactDetail>("contact.get", undefined, { id }),
   createContact: (payload: ContactUpsertInput) =>
     request<ContactDetail>("entities/create", {

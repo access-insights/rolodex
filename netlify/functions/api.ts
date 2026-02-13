@@ -6,6 +6,17 @@ import { z } from "zod";
 type Role = "admin" | "creator" | "participant";
 type ContactType = "Advisor" | "Funder" | "Partner" | "Client" | "General";
 type ContactStatus = "Active" | "Prospect" | "Inactive" | "Archived";
+type ContactAttribute =
+  | "Academia"
+  | "Accessible Education"
+  | "Startup"
+  | "Not for Profit"
+  | "AgeTech"
+  | "Robotics"
+  | "AI Solutions"
+  | "Consumer Products"
+  | "Disability Services"
+  | "Disability Community";
 
 type JsonEnvelope<T> = {
   ok: boolean;
@@ -48,6 +59,7 @@ type DbContact = {
   linkedin_company: string | null;
   linkedin_job_title: string | null;
   linkedin_location: string | null;
+  attributes: ContactAttribute[];
   created_at: string;
   updated_at: string;
 };
@@ -93,6 +105,7 @@ type ContactUpsertInput = {
   referredBy?: string;
   referredByContactId?: string;
   linkedInProfileUrl?: string;
+  attributes?: ContactAttribute[];
   phones?: ContactMethodInput[];
   emails?: ContactMethodInput[];
   websites?: ContactMethodInput[];
@@ -102,6 +115,7 @@ const env = {
   supabaseDbUrl: process.env.SUPABASE_DB_URL,
   azureIssuer: process.env.AZURE_ISSUER,
   azureAudience: process.env.AZURE_AUDIENCE,
+  azureClientId: process.env.AZURE_CLIENT_ID || process.env.VITE_AZURE_CLIENT_ID,
   azureJwks: process.env.AZURE_JWKS_URI,
   defaultOrgId: process.env.DEFAULT_ORG_ID || "",
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX || 100),
@@ -166,9 +180,14 @@ const verifyToken = async (event: HandlerEvent): Promise<AuthedContext> => {
     throw new Error("Missing authorization configuration");
   }
 
+  const allowedAudiences = [
+    ...(env.azureAudience ? env.azureAudience.split(",").map((value) => value.trim()).filter(Boolean) : []),
+    ...(env.azureClientId ? [env.azureClientId.trim()] : [])
+  ];
+
   const { payload } = await jwtVerify(token, jwks, {
     issuer: env.azureIssuer,
-    audience: env.azureAudience
+    audience: allowedAudiences.length > 0 ? allowedAudiences : undefined
   });
 
   const userId = String(payload.sub || "");
@@ -243,6 +262,23 @@ const contactUpsertSchema = z.object({
   contactType: z.enum(["Advisor", "Funder", "Partner", "Client", "General"]),
   status: z.enum(["Active", "Prospect", "Inactive", "Archived"]),
   linkedInProfileUrl: z.string().trim().url().optional(),
+  attributes: z
+    .array(
+      z.enum([
+        "Academia",
+        "Accessible Education",
+        "Startup",
+        "Not for Profit",
+        "AgeTech",
+        "Robotics",
+        "AI Solutions",
+        "Consumer Products",
+        "Disability Services",
+        "Disability Community"
+      ])
+    )
+    .max(20)
+    .optional(),
   phones: z.array(methodEntrySchema).max(25).optional(),
   emails: z.array(methodEntrySchema).max(25).optional(),
   websites: z.array(methodEntrySchema).max(25).optional()
@@ -286,6 +322,7 @@ const mapContactSummary = (contact: DbContact) => ({
   linkedInCompany: contact.linkedin_company,
   linkedInJobTitle: contact.linkedin_job_title,
   linkedInLocation: contact.linkedin_location,
+  attributes: contact.attributes ?? [],
   createdAt: contact.created_at,
   updatedAt: contact.updated_at
 });
@@ -398,6 +435,7 @@ const loadContactSummary = async (client: PoolClient, orgId: string, id: string)
       linkedin_company,
       linkedin_job_title,
       linkedin_location,
+      attributes,
       created_at,
       updated_at
     from contacts
@@ -693,6 +731,7 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
       case "entities/list":
       case "contact.list": {
         requireRole(ctx, ["admin", "creator", "participant"]);
+        const searchTerm = (event.queryStringParameters?.search || "").trim();
         const contacts = await client.query<DbContact>(
           `
           select
@@ -712,14 +751,66 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             linkedin_company,
             linkedin_job_title,
             linkedin_location,
+            attributes,
             created_at,
             updated_at
           from contacts
           where organization_id = $1
+            and (
+              $2 = ''
+              or (
+                to_tsvector(
+                  'simple',
+                  concat_ws(
+                    ' ',
+                    coalesce(first_name, ''),
+                    coalesce(last_name, ''),
+                    coalesce(organization, ''),
+                    coalesce(role, ''),
+                    coalesce(internal_contact, ''),
+                    coalesce(referred_by, ''),
+                    coalesce(linkedin_profile_url, ''),
+                    coalesce(linkedin_company, ''),
+                    coalesce(linkedin_job_title, ''),
+                    coalesce(linkedin_location, ''),
+                    array_to_string(attributes::text[], ' ')
+                  )
+                ) @@ websearch_to_tsquery('simple', $2)
+              )
+              or exists (
+                select 1
+                from contact_phone_numbers p
+                where p.organization_id = contacts.organization_id
+                  and p.contact_id = contacts.unique_id
+                  and (p.phone_number ilike ('%' || $2 || '%') or coalesce(p.label, '') ilike ('%' || $2 || '%'))
+              )
+              or exists (
+                select 1
+                from contact_emails e
+                where e.organization_id = contacts.organization_id
+                  and e.contact_id = contacts.unique_id
+                  and (e.email ilike ('%' || $2 || '%') or coalesce(e.label, '') ilike ('%' || $2 || '%'))
+              )
+              or exists (
+                select 1
+                from contact_websites w
+                where w.organization_id = contacts.organization_id
+                  and w.contact_id = contacts.unique_id
+                  and (w.url ilike ('%' || $2 || '%') or coalesce(w.label, '') ilike ('%' || $2 || '%'))
+              )
+              or exists (
+                select 1
+                from contact_comments c
+                where c.organization_id = contacts.organization_id
+                  and c.contact_id = contacts.unique_id
+                  and c.deleted_at is null
+                  and c.body ilike ('%' || $2 || '%')
+              )
+            )
           order by last_name asc, first_name asc
           limit 500
           `,
-          [ctx.orgId]
+          [ctx.orgId, searchTerm]
         );
 
         return json(200, {
@@ -764,6 +855,7 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             contact_type,
             status,
             linkedin_profile_url,
+            attributes,
             created_by,
             updated_by
           )
@@ -779,8 +871,9 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             $9::contact_type_enum,
             $10::contact_status_enum,
             $11,
-            $12,
-            $12
+            $12::contact_attribute_enum[],
+            $13,
+            $13
           )
           returning unique_id
           `,
@@ -796,6 +889,7 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             payload.contactType,
             payload.status,
             payload.linkedInProfileUrl ?? null,
+            payload.attributes ?? [],
             actorUserId
           ]
         );
@@ -835,8 +929,9 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             contact_type = $8::contact_type_enum,
             status = $9::contact_status_enum,
             linkedin_profile_url = $10,
-            updated_by = $11
-          where unique_id = $12 and organization_id = $13
+            attributes = $11::contact_attribute_enum[],
+            updated_by = $12
+          where unique_id = $13 and organization_id = $14
           returning unique_id
           `,
           [
@@ -850,6 +945,7 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             payload.contactType,
             payload.status,
             payload.linkedInProfileUrl ?? null,
+            payload.attributes ?? [],
             actorUserId,
             payload.id,
             ctx.orgId
