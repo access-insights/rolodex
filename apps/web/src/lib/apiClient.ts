@@ -96,6 +96,11 @@ export type ContactUpsertInput = {
 };
 
 const apiBase = import.meta.env.VITE_API_BASE || "/api";
+let apiAuthToken: string | null = null;
+
+export const setApiAuthToken = (token: string | null) => {
+  apiAuthToken = token;
+};
 
 async function request<T>(
   action: string,
@@ -112,6 +117,7 @@ async function request<T>(
     ...init,
     headers: {
       "content-type": "application/json",
+      ...(apiAuthToken ? { authorization: `Bearer ${apiAuthToken}` } : {}),
       ...(init?.headers || {})
     }
   });

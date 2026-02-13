@@ -143,6 +143,24 @@ const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const verifyToken = async (event: HandlerEvent): Promise<AuthedContext> => {
+  const isDevBypass =
+    process.env.NODE_ENV !== "production" &&
+    (process.env.NETLIFY_DEV === "true" || process.env.ALLOW_DEV_AUTH === "true");
+
+  if ((!jwks || !env.azureIssuer || !env.azureAudience) && isDevBypass) {
+    if (!env.defaultOrgId || !isUuid(env.defaultOrgId)) {
+      throw new Error("Invalid organization context");
+    }
+
+    return {
+      userId: process.env.DEV_USER_SUB || "dev-local-sub",
+      email: process.env.DEV_USER_EMAIL || "dev@example.com",
+      role: parseRole([process.env.DEV_USER_ROLE || "participant"]),
+      orgId: env.defaultOrgId,
+      token: {}
+    };
+  }
+
   const token = getBearerToken(event);
   if (!token || !jwks || !env.azureIssuer || !env.azureAudience) {
     throw new Error("Missing authorization configuration");

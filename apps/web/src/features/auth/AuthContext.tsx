@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getMsalInstance } from "./msal";
+import { setApiAuthToken } from "../../lib/apiClient";
 
 export type AppRole = "admin" | "creator" | "participant";
 
@@ -34,9 +35,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    const loadAccountToken = async (account: { homeAccountId: string } & Record<string, unknown>) => {
+      const msalInstance = getMsalInstance();
+      if (!msalInstance) return null;
+
+      try {
+        const tokenResult = await msalInstance.acquireTokenSilent({
+          account: account as Parameters<typeof msalInstance.acquireTokenSilent>[0]["account"],
+          scopes: ["openid", "profile", "email"]
+        });
+
+        return tokenResult.idToken || tokenResult.accessToken || null;
+      } catch {
+        return null;
+      }
+    };
+
     const bootstrap = async () => {
       const msalInstance = getMsalInstance();
       if (!msalInstance) {
+        setApiAuthToken(null);
         setIsLoading(false);
         return;
       }
@@ -45,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await msalInstance.initialize();
         const redirectResult = await msalInstance.handleRedirectPromise();
         if (redirectResult?.account) {
+          setApiAuthToken(redirectResult.idToken || redirectResult.accessToken || null);
           setUser({
             id: redirectResult.account.homeAccountId,
             email: redirectResult.account.username,
@@ -56,6 +75,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const accounts = msalInstance.getAllAccounts();
         const active = accounts[0];
         if (active) {
+          const token = await loadAccountToken(active as unknown as { homeAccountId: string } & Record<string, unknown>);
+          setApiAuthToken(token);
           setUser({
             id: active.homeAccountId,
             email: active.username,
@@ -68,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     bootstrap().catch(() => {
+      setApiAuthToken(null);
       setIsLoading(false);
     });
   }, []);
@@ -75,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async () => {
     const msalInstance = getMsalInstance();
     if (!msalInstance || !import.meta.env.VITE_AZURE_CLIENT_ID) {
+      setApiAuthToken(null);
       setUser({ id: "dev-user", email: "dev@example.com", role: FALLBACK_ROLE });
       return;
     }
@@ -86,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    setApiAuthToken(null);
     setUser(null);
     const msalInstance = getMsalInstance();
     if (msalInstance && import.meta.env.VITE_AZURE_CLIENT_ID) {
