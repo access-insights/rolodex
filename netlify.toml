@@ -31,6 +31,12 @@
   status = 200
 
 [[redirects]]
+  from = "/auth/popup-callback.html"
+  to = "/auth/popup-callback.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
