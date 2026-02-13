@@ -19,16 +19,18 @@ export function LoginPage() {
   }, [navigate, state, user]);
 
   return (
-    <section aria-labelledby="login-title" className="max-w-xl rounded border border-border bg-surface p-6">
-      <h1 id="login-title" className="text-2xl font-semibold">
-        Sign in
-      </h1>
-      <p className="mt-2 text-muted">
-        Use your Microsoft account to continue. In local mode without Azure settings, a development user is used.
-      </p>
-      <button className="btn mt-4" onClick={() => void login()}>
-        Continue with Microsoft
-      </button>
+    <section
+      aria-labelledby="login-title"
+      className="flex min-h-screen items-center justify-center bg-white px-4 text-black"
+    >
+      <div className="w-full max-w-sm text-center">
+        <h1 id="login-title" className="text-4xl font-semibold tracking-tight">
+          Rolodex
+        </h1>
+        <button className="btn mt-8 w-full" onClick={() => void login()}>
+          Login
+        </button>
+      </div>
     </section>
   );
 }

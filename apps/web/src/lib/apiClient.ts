@@ -8,26 +8,91 @@ export type ApiEnvelope<T> = {
   meta?: Record<string, unknown>;
 };
 
+export type AppRole = "admin" | "creator" | "participant";
+export type ContactType = "Advisor" | "Funder" | "Partner" | "Client" | "General";
+export type ContactStatus = "Active" | "Prospect" | "Inactive" | "Archived";
+
+export type ContactMethod = {
+  id?: string;
+  label?: string | null;
+  value: string;
+  createdAt?: string;
+};
+
+export type ContactComment = {
+  id: string;
+  body: string;
+  archived: boolean;
+  createdAt: string;
+  authorDisplayName?: string;
+};
+
+export type LinkedInHistoryEntry = {
+  id: string;
+  snapshot: Record<string, unknown>;
+  capturedAt: string;
+  createdAt: string;
+};
+
 export type ContactListItem = {
   id: string;
   firstName: string;
   lastName: string;
   orgId?: string;
+  company?: string | null;
+  role?: string | null;
+  internalContact?: string | null;
+  referredBy?: string | null;
+  referredByContactId?: string | null;
+  contactType: ContactType;
+  status: ContactStatus;
+  linkedInProfileUrl?: string | null;
+  linkedInPictureUrl?: string | null;
+  linkedInCompany?: string | null;
+  linkedInJobTitle?: string | null;
+  linkedInLocation?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ContactDetail = ContactListItem & {
+  referredByContact?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  } | null;
+  phones: ContactMethod[];
+  emails: ContactMethod[];
+  websites: ContactMethod[];
+  referrals: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+  }>;
+  comments: ContactComment[];
 };
 
 export type UserListItem = {
   id: string;
-  role: "admin" | "creator" | "participant";
+  role: AppRole;
   orgId: string;
 };
 
-type CreateEntityInput = {
+export type ContactUpsertInput = {
+  id?: string;
   firstName: string;
   lastName: string;
-  organization: string;
-  role: string;
-  contactType: "Advisor" | "Client" | "Funder" | "Partner";
-  status: "Active" | "Prospect";
+  company?: string;
+  role?: string;
+  contactType: ContactType;
+  status: ContactStatus;
+  internalContact?: string;
+  referredBy?: string;
+  referredByContactId?: string;
+  linkedInProfileUrl?: string;
+  phones?: ContactMethod[];
+  emails?: ContactMethod[];
+  websites?: ContactMethod[];
 };
 
 const apiBase = import.meta.env.VITE_API_BASE || "/api";
@@ -63,18 +128,53 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify({ userId, role })
     }),
-  listEntities: () => request<ContactListItem[]>("entities/list"),
-  getEntity: (id: string) => request<ContactListItem>("entities/get", undefined, { id }),
-  createEntity: (payload: CreateEntityInput) =>
-    request<ContactListItem>("entities/create", {
+
+  listContacts: () => request<ContactListItem[]>("contact.list"),
+  getContact: (id: string) => request<ContactDetail>("contact.get", undefined, { id }),
+  createContact: (payload: ContactUpsertInput) =>
+    request<ContactDetail>("entities/create", {
       method: "POST",
       body: JSON.stringify(payload)
     }),
-  updateEntity: (payload: CreateEntityInput & { id: string }) =>
-    request<ContactListItem>("entities/update", {
+  updateContact: (payload: ContactUpsertInput & { id: string }) =>
+    request<ContactDetail>("contact.update", {
       method: "POST",
       body: JSON.stringify(payload)
     }),
-  deleteEntity: (id: string) => request<{ deleted: boolean }>("entities/delete", undefined, { id }),
+  deleteContact: (id: string) => request<{ deleted: boolean }>("contact.delete", undefined, { id }),
+
+  importLinkedIn: (payload: { contactId?: string; profileUrl: string; firstName?: string; lastName?: string; company?: string }) =>
+    request<ContactDetail>("contact.importLinkedIn", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+
+  importCsv: (csvContent: string) =>
+    request<{ insertedCount: number; insertedIds: string[] }>("contact.importCsv", {
+      method: "POST",
+      body: JSON.stringify({ csvContent })
+    }),
+
+  addComment: (contactId: string, body: string) =>
+    request<ContactComment>("contact.addComment", {
+      method: "POST",
+      body: JSON.stringify({ contactId, body })
+    }),
+
+  archiveComment: (commentId: string) =>
+    request<{ archived: boolean; id: string }>("contact.archiveComment", {
+      method: "POST",
+      body: JSON.stringify({ commentId })
+    }),
+
+  deleteComment: (commentId: string) =>
+    request<{ deleted: boolean; id: string }>("contact.deleteComment", {
+      method: "POST",
+      body: JSON.stringify({ commentId })
+    }),
+
+  getLinkedInHistory: (contactId: string) =>
+    request<LinkedInHistoryEntry[]>("contact.getLinkedInHistory", undefined, { contactId }),
+
   exportCsv: () => request<{ message: string; url: string }>("csv/export")
 };

@@ -4,17 +4,17 @@ import { App } from "../app/App";
 import { AuthProvider } from "../features/auth/AuthContext";
 
 describe("App shell", () => {
-  it("renders top-level landmarks", () => {
+  it("renders login-only splash content before sign-in", () => {
     render(
-      <MemoryRouter initialEntries={["/contacts"]}>
+      <MemoryRouter initialEntries={["/login"]}>
         <AuthProvider>
           <App />
         </AuthProvider>
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("banner")).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Skip to content" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Rolodex" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Login" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Primary" })).not.toBeInTheDocument();
   });
 });

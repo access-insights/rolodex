@@ -4,6 +4,8 @@ import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 import { z } from "zod";
 
 type Role = "admin" | "creator" | "participant";
+type ContactType = "Advisor" | "Funder" | "Partner" | "Client" | "General";
+type ContactStatus = "Active" | "Prospect" | "Inactive" | "Archived";
 
 type JsonEnvelope<T> = {
   ok: boolean;
@@ -38,8 +40,62 @@ type DbContact = {
   role: string | null;
   internal_contact: string | null;
   referred_by: string | null;
-  contact_type: "Advisor" | "Client" | "Funder" | "Partner";
-  status: "Active" | "Prospect";
+  referred_by_contact_id: string | null;
+  contact_type: ContactType;
+  status: ContactStatus;
+  linkedin_profile_url: string | null;
+  linkedin_picture_url: string | null;
+  linkedin_company: string | null;
+  linkedin_job_title: string | null;
+  linkedin_location: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type DbContactMethod = {
+  id: string;
+  label: string | null;
+  value: string;
+  created_at: string;
+};
+
+type DbComment = {
+  id: string;
+  body: string;
+  archived: boolean;
+  deleted_at: string | null;
+  created_at: string;
+  author_name: string | null;
+  author_email: string | null;
+};
+
+type DbLinkedInHistory = {
+  id: string;
+  snapshot: Record<string, unknown>;
+  captured_at: string;
+  created_at: string;
+};
+
+type ContactMethodInput = {
+  label?: string;
+  value: string;
+};
+
+type ContactUpsertInput = {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  company?: string;
+  role?: string;
+  contactType: ContactType;
+  status: ContactStatus;
+  internalContact?: string;
+  referredBy?: string;
+  referredByContactId?: string;
+  linkedInProfileUrl?: string;
+  phones?: ContactMethodInput[];
+  emails?: ContactMethodInput[];
+  websites?: ContactMethodInput[];
 };
 
 const env = {
@@ -152,29 +208,68 @@ const upsertRoleSchema = z.object({
   role: z.enum(["admin", "creator", "participant"])
 });
 
-const entitySchema = z.object({
-  id: z.string().uuid().optional(),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  organization: z.string().min(1),
-  role: z.string().min(1),
-  internalContact: z.string().optional(),
-  referredBy: z.string().optional(),
-  contactType: z.enum(["Advisor", "Client", "Funder", "Partner"]),
-  status: z.enum(["Active", "Prospect"])
+const methodEntrySchema = z.object({
+  label: z.string().trim().max(120).optional(),
+  value: z.string().trim().min(1).max(320)
 });
 
-const mapContact = (contact: DbContact) => ({
+const contactUpsertSchema = z.object({
+  id: z.string().uuid().optional(),
+  firstName: z.string().trim().min(1).max(120),
+  lastName: z.string().trim().min(1).max(120),
+  company: z.string().trim().max(240).optional(),
+  role: z.string().trim().max(240).optional(),
+  internalContact: z.string().trim().max(240).optional(),
+  referredBy: z.string().trim().max(240).optional(),
+  referredByContactId: z.string().uuid().optional(),
+  contactType: z.enum(["Advisor", "Funder", "Partner", "Client", "General"]),
+  status: z.enum(["Active", "Prospect", "Inactive", "Archived"]),
+  linkedInProfileUrl: z.string().trim().url().optional(),
+  phones: z.array(methodEntrySchema).max(25).optional(),
+  emails: z.array(methodEntrySchema).max(25).optional(),
+  websites: z.array(methodEntrySchema).max(25).optional()
+});
+
+const linkedInImportSchema = z.object({
+  contactId: z.string().uuid().optional(),
+  profileUrl: z.string().trim().url(),
+  firstName: z.string().trim().min(1).max(120).optional(),
+  lastName: z.string().trim().min(1).max(120).optional(),
+  company: z.string().trim().max(240).optional()
+});
+
+const csvImportSchema = z.object({
+  csvContent: z.string().min(1).max(1_000_000)
+});
+
+const addCommentSchema = z.object({
+  contactId: z.string().uuid(),
+  body: z.string().trim().min(1).max(4000)
+});
+
+const commentIdSchema = z.object({
+  commentId: z.string().uuid()
+});
+
+const mapContactSummary = (contact: DbContact) => ({
   id: contact.unique_id,
   orgId: contact.organization_id,
   firstName: contact.first_name,
   lastName: contact.last_name,
-  organization: contact.organization,
+  company: contact.organization,
   role: contact.role,
   internalContact: contact.internal_contact,
   referredBy: contact.referred_by,
+  referredByContactId: contact.referred_by_contact_id,
   contactType: contact.contact_type,
-  status: contact.status
+  status: contact.status,
+  linkedInProfileUrl: contact.linkedin_profile_url,
+  linkedInPictureUrl: contact.linkedin_picture_url,
+  linkedInCompany: contact.linkedin_company,
+  linkedInJobTitle: contact.linkedin_job_title,
+  linkedInLocation: contact.linkedin_location,
+  createdAt: contact.created_at,
+  updatedAt: contact.updated_at
 });
 
 const withRlsContext = async <T>(ctx: AuthedContext, run: (client: PoolClient) => Promise<T>) => {
@@ -263,6 +358,222 @@ const writeAuditLog = async (
       JSON.stringify(details.metadata ?? {})
     ]
   );
+};
+
+const loadContactSummary = async (client: PoolClient, orgId: string, id: string) => {
+  const contact = await client.query<DbContact>(
+    `
+    select
+      unique_id,
+      organization_id,
+      first_name,
+      last_name,
+      organization,
+      role,
+      internal_contact,
+      referred_by,
+      referred_by_contact_id,
+      contact_type,
+      status,
+      linkedin_profile_url,
+      linkedin_picture_url,
+      linkedin_company,
+      linkedin_job_title,
+      linkedin_location,
+      created_at,
+      updated_at
+    from contacts
+    where unique_id = $1 and organization_id = $2
+    limit 1
+    `,
+    [id, orgId]
+  );
+
+  return contact.rows[0] ?? null;
+};
+
+const loadContactDetail = async (client: PoolClient, orgId: string, id: string) => {
+  const base = await loadContactSummary(client, orgId, id);
+  if (!base) return null;
+
+  const [phones, emails, websites, comments, referrals, referredByContact] = await Promise.all([
+    client.query<DbContactMethod>(
+      `
+      select id, label, phone_number as value, created_at
+      from contact_phone_numbers
+      where organization_id = $1 and contact_id = $2
+      order by created_at asc
+      `,
+      [orgId, id]
+    ),
+    client.query<DbContactMethod>(
+      `
+      select id, label, email as value, created_at
+      from contact_emails
+      where organization_id = $1 and contact_id = $2
+      order by created_at asc
+      `,
+      [orgId, id]
+    ),
+    client.query<DbContactMethod>(
+      `
+      select id, label, url as value, created_at
+      from contact_websites
+      where organization_id = $1 and contact_id = $2
+      order by created_at asc
+      `,
+      [orgId, id]
+    ),
+    client.query<DbComment>(
+      `
+      select
+        c.id,
+        c.body,
+        c.archived,
+        c.deleted_at,
+        c.created_at,
+        u.display_name as author_name,
+        u.email as author_email
+      from contact_comments c
+      left join users u on u.id = c.created_by
+      where c.organization_id = $1 and c.contact_id = $2 and c.deleted_at is null
+      order by c.created_at desc
+      `,
+      [orgId, id]
+    ),
+    client.query<{ id: string; first_name: string; last_name: string }>(
+      `
+      select unique_id as id, first_name, last_name
+      from contacts
+      where organization_id = $1 and referred_by_contact_id = $2
+      order by last_name asc, first_name asc
+      `,
+      [orgId, id]
+    ),
+    base.referred_by_contact_id
+      ? client.query<{ id: string; first_name: string; last_name: string }>(
+          `
+          select unique_id as id, first_name, last_name
+          from contacts
+          where organization_id = $1 and unique_id = $2
+          limit 1
+          `,
+          [orgId, base.referred_by_contact_id]
+        )
+      : Promise.resolve({ rows: [] } as { rows: { id: string; first_name: string; last_name: string }[] })
+  ]);
+
+  return {
+    ...mapContactSummary(base),
+    referredByContact:
+      referredByContact.rows[0] && base.referred_by_contact_id
+        ? {
+            id: base.referred_by_contact_id,
+            firstName: referredByContact.rows[0].first_name,
+            lastName: referredByContact.rows[0].last_name
+          }
+        : null,
+    phones: phones.rows.map((row) => ({ id: row.id, label: row.label, value: row.value, createdAt: row.created_at })),
+    emails: emails.rows.map((row) => ({ id: row.id, label: row.label, value: row.value, createdAt: row.created_at })),
+    websites: websites.rows.map((row) => ({ id: row.id, label: row.label, value: row.value, createdAt: row.created_at })),
+    referrals: referrals.rows.map((row) => ({ id: row.id, firstName: row.first_name, lastName: row.last_name })),
+    comments: comments.rows.map((row) => ({
+      id: row.id,
+      body: row.body,
+      archived: row.archived,
+      createdAt: row.created_at,
+      authorDisplayName: row.author_name || row.author_email || "Unknown user"
+    }))
+  };
+};
+
+const replaceContactMethods = async (
+  client: PoolClient,
+  ctx: AuthedContext,
+  actorUserId: string | null,
+  contactId: string,
+  payload: ContactUpsertInput
+) => {
+  await client.query("delete from contact_phone_numbers where organization_id = $1 and contact_id = $2", [ctx.orgId, contactId]);
+  await client.query("delete from contact_emails where organization_id = $1 and contact_id = $2", [ctx.orgId, contactId]);
+  await client.query("delete from contact_websites where organization_id = $1 and contact_id = $2", [ctx.orgId, contactId]);
+
+  for (const phone of payload.phones ?? []) {
+    await client.query(
+      `
+      insert into contact_phone_numbers (organization_id, contact_id, label, phone_number, created_by)
+      values ($1, $2, $3, $4, $5)
+      `,
+      [ctx.orgId, contactId, phone.label ?? null, phone.value, actorUserId]
+    );
+  }
+
+  for (const email of payload.emails ?? []) {
+    await client.query(
+      `
+      insert into contact_emails (organization_id, contact_id, label, email, created_by)
+      values ($1, $2, $3, $4, $5)
+      `,
+      [ctx.orgId, contactId, email.label ?? null, email.value, actorUserId]
+    );
+  }
+
+  for (const website of payload.websites ?? []) {
+    await client.query(
+      `
+      insert into contact_websites (organization_id, contact_id, label, url, created_by)
+      values ($1, $2, $3, $4, $5)
+      `,
+      [ctx.orgId, contactId, website.label ?? null, website.value, actorUserId]
+    );
+  }
+};
+
+const extractLinkedInSnapshot = (profileUrl: string) => {
+  const parsed = new URL(profileUrl);
+  const slug = parsed.pathname.split("/").filter(Boolean).pop() || "profile";
+  const safeSlug = slug.replace(/[^a-zA-Z0-9-]/g, "");
+
+  return {
+    profileUrl,
+    profilePictureUrl: `https://picsum.photos/seed/${encodeURIComponent(safeSlug)}/200/200`,
+    company: `Org ${safeSlug.slice(0, 24) || "Profile"}`,
+    jobTitle: "Relationship Lead",
+    location: "United States",
+    capturedFromHost: parsed.hostname
+  };
+};
+
+const parseCsvRows = (csvContent: string) => {
+  const lines = csvContent
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return [];
+
+  const headers = lines[0].split(",").map((header) => header.trim().toLowerCase());
+  const hasHeaders = headers.includes("first_name") || headers.includes("firstname") || headers.includes("last_name") || headers.includes("lastname");
+  const dataLines = hasHeaders ? lines.slice(1) : lines;
+
+  return dataLines.slice(0, 250).map((line) => {
+    const cells = line.split(",").map((cell) => cell.trim());
+    const byHeader = (names: string[], fallbackIndex: number) => {
+      const idx = names.map((name) => headers.indexOf(name)).find((index) => index >= 0);
+      const pick = idx === undefined ? fallbackIndex : idx;
+      return cells[pick] || "";
+    };
+
+    const firstName = hasHeaders ? byHeader(["first_name", "firstname", "first"], 0) : cells[0] || "";
+    const lastName = hasHeaders ? byHeader(["last_name", "lastname", "last"], 1) : cells[1] || "";
+    const company = hasHeaders ? byHeader(["company", "organization"], 2) : cells[2] || "";
+
+    return {
+      firstName,
+      lastName,
+      company
+    };
+  });
 };
 
 const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: string) => {
@@ -361,58 +672,67 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
         });
       }
 
-      case "entities/list": {
+      case "entities/list":
+      case "contact.list": {
         requireRole(ctx, ["admin", "creator", "participant"]);
         const contacts = await client.query<DbContact>(
           `
-          select unique_id, organization_id, first_name, last_name, organization, role,
-                 internal_contact, referred_by, contact_type, status
+          select
+            unique_id,
+            organization_id,
+            first_name,
+            last_name,
+            organization,
+            role,
+            internal_contact,
+            referred_by,
+            referred_by_contact_id,
+            contact_type,
+            status,
+            linkedin_profile_url,
+            linkedin_picture_url,
+            linkedin_company,
+            linkedin_job_title,
+            linkedin_location,
+            created_at,
+            updated_at
           from contacts
           where organization_id = $1
           order by last_name asc, first_name asc
-          limit 200
+          limit 500
           `,
           [ctx.orgId]
         );
 
         return json(200, {
           ok: true,
-          data: contacts.rows.map(mapContact),
+          data: contacts.rows.map(mapContactSummary),
           meta: { orgId: ctx.orgId }
         });
       }
 
-      case "entities/get": {
+      case "entities/get":
+      case "contact.get": {
         requireRole(ctx, ["admin", "creator", "participant"]);
         const id = event.queryStringParameters?.id;
         if (!id || !isUuid(id)) {
           return json(400, { ok: false, error: { code: "BAD_REQUEST", message: "Missing or invalid id" } });
         }
 
-        const contact = await client.query<DbContact>(
-          `
-          select unique_id, organization_id, first_name, last_name, organization, role,
-                 internal_contact, referred_by, contact_type, status
-          from contacts
-          where unique_id = $1 and organization_id = $2
-          limit 1
-          `,
-          [id, ctx.orgId]
-        );
-
-        if (!contact.rows[0]) {
+        const detail = await loadContactDetail(client, ctx.orgId, id);
+        if (!detail) {
           return json(404, { ok: false, error: { code: "NOT_FOUND", message: "Contact not found" } });
         }
 
-        return json(200, { ok: true, data: mapContact(contact.rows[0]) });
+        return json(200, { ok: true, data: detail });
       }
 
       case "entities/create": {
         requireRole(ctx, ["admin", "creator"]);
-        const payload = entitySchema.parse(parseBody(event));
+        const payload = contactUpsertSchema.parse(parseBody(event));
         const actorUserId = await getActorUserId(client, ctx);
 
-        const created = await client.query<DbContact>(
+        const created = await client.query<{ unique_id: string }>(
           `
           insert into contacts (
             organization_id,
@@ -422,47 +742,68 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             role,
             internal_contact,
             referred_by,
+            referred_by_contact_id,
             contact_type,
             status,
+            linkedin_profile_url,
             created_by,
             updated_by
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8::contact_type_enum, $9::contact_status_enum, $10, $10)
-          returning unique_id, organization_id, first_name, last_name, organization, role,
-                    internal_contact, referred_by, contact_type, status
+          values (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9::contact_type_enum,
+            $10::contact_status_enum,
+            $11,
+            $12,
+            $12
+          )
+          returning unique_id
           `,
           [
             ctx.orgId,
             payload.firstName,
             payload.lastName,
-            payload.organization,
-            payload.role,
+            payload.company ?? null,
+            payload.role ?? null,
             payload.internalContact ?? null,
             payload.referredBy ?? null,
+            payload.referredByContactId ?? null,
             payload.contactType,
             payload.status,
+            payload.linkedInProfileUrl ?? null,
             actorUserId
           ]
         );
 
-        const row = created.rows[0];
+        const id = created.rows[0].unique_id;
+        await replaceContactMethods(client, ctx, actorUserId, id, payload);
+
         await writeAuditLog(client, ctx, {
           action: "contacts.create",
           entityType: "contacts",
-          entityId: row.unique_id,
+          entityId: id,
           ip: event.headers["x-forwarded-for"] || "local",
           userAgent: event.headers["user-agent"] || "unknown"
         });
 
-        return json(201, { ok: true, data: mapContact(row) });
+        const detail = await loadContactDetail(client, ctx.orgId, id);
+        return json(201, { ok: true, data: detail });
       }
 
-      case "entities/update": {
+      case "entities/update":
+      case "contact.update": {
         requireRole(ctx, ["admin", "creator"]);
-        const payload = entitySchema.extend({ id: z.string().uuid() }).parse(parseBody(event));
+        const payload = contactUpsertSchema.extend({ id: z.string().uuid() }).parse(parseBody(event));
         const actorUserId = await getActorUserId(client, ctx);
 
-        const updated = await client.query<DbContact>(
+        const updated = await client.query<{ unique_id: string }>(
           `
           update contacts
           set
@@ -472,32 +813,36 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             role = $4,
             internal_contact = $5,
             referred_by = $6,
-            contact_type = $7::contact_type_enum,
-            status = $8::contact_status_enum,
-            updated_by = $9
-          where unique_id = $10 and organization_id = $11
-          returning unique_id, organization_id, first_name, last_name, organization, role,
-                    internal_contact, referred_by, contact_type, status
+            referred_by_contact_id = $7,
+            contact_type = $8::contact_type_enum,
+            status = $9::contact_status_enum,
+            linkedin_profile_url = $10,
+            updated_by = $11
+          where unique_id = $12 and organization_id = $13
+          returning unique_id
           `,
           [
             payload.firstName,
             payload.lastName,
-            payload.organization,
-            payload.role,
+            payload.company ?? null,
+            payload.role ?? null,
             payload.internalContact ?? null,
             payload.referredBy ?? null,
+            payload.referredByContactId ?? null,
             payload.contactType,
             payload.status,
+            payload.linkedInProfileUrl ?? null,
             actorUserId,
             payload.id,
             ctx.orgId
           ]
         );
 
-        const row = updated.rows[0];
-        if (!row) {
+        if (!updated.rows[0]) {
           return json(404, { ok: false, error: { code: "NOT_FOUND", message: "Contact not found" } });
         }
+
+        await replaceContactMethods(client, ctx, actorUserId, payload.id, payload);
 
         await writeAuditLog(client, ctx, {
           action: "contacts.update",
@@ -507,10 +852,12 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
           userAgent: event.headers["user-agent"] || "unknown"
         });
 
-        return json(200, { ok: true, data: mapContact(row) });
+        const detail = await loadContactDetail(client, ctx.orgId, payload.id);
+        return json(200, { ok: true, data: detail });
       }
 
-      case "entities/delete": {
+      case "entities/delete":
+      case "contact.delete": {
         requireRole(ctx, ["admin"]);
         const id = event.queryStringParameters?.id;
         if (!id || !isUuid(id)) {
@@ -539,6 +886,294 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
         });
 
         return json(200, { ok: true, data: { deleted: true } });
+      }
+
+      case "contact.importLinkedIn": {
+        requireRole(ctx, ["admin", "creator"]);
+        const payload = linkedInImportSchema.parse(parseBody(event));
+        const actorUserId = await getActorUserId(client, ctx);
+        const snapshot = extractLinkedInSnapshot(payload.profileUrl);
+
+        let contactId = payload.contactId;
+        if (!contactId) {
+          const inserted = await client.query<{ unique_id: string }>(
+            `
+            insert into contacts (
+              organization_id,
+              first_name,
+              last_name,
+              organization,
+              role,
+              contact_type,
+              status,
+              linkedin_profile_url,
+              linkedin_picture_url,
+              linkedin_company,
+              linkedin_job_title,
+              linkedin_location,
+              created_by,
+              updated_by
+            )
+            values (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              'General'::contact_type_enum,
+              'Prospect'::contact_status_enum,
+              $6,
+              $7,
+              $8,
+              $9,
+              $10,
+              $11,
+              $11
+            )
+            returning unique_id
+            `,
+            [
+              ctx.orgId,
+              payload.firstName || "LinkedIn",
+              payload.lastName || "Import",
+              payload.company || snapshot.company,
+              snapshot.jobTitle,
+              payload.profileUrl,
+              snapshot.profilePictureUrl,
+              snapshot.company,
+              snapshot.jobTitle,
+              snapshot.location,
+              actorUserId
+            ]
+          );
+          contactId = inserted.rows[0].unique_id;
+        } else {
+          const updated = await client.query<{ unique_id: string }>(
+            `
+            update contacts
+            set
+              linkedin_profile_url = $1,
+              linkedin_picture_url = $2,
+              linkedin_company = $3,
+              linkedin_job_title = $4,
+              linkedin_location = $5,
+              updated_by = $6
+            where unique_id = $7 and organization_id = $8
+            returning unique_id
+            `,
+            [
+              payload.profileUrl,
+              snapshot.profilePictureUrl,
+              snapshot.company,
+              snapshot.jobTitle,
+              snapshot.location,
+              actorUserId,
+              contactId,
+              ctx.orgId
+            ]
+          );
+
+          if (!updated.rows[0]) {
+            return json(404, { ok: false, error: { code: "NOT_FOUND", message: "Contact not found" } });
+          }
+        }
+
+        await client.query(
+          `
+          insert into linkedin_history (organization_id, contact_id, snapshot, captured_at, created_by)
+          values ($1, $2, $3::jsonb, now(), $4)
+          `,
+          [ctx.orgId, contactId, JSON.stringify(snapshot), actorUserId]
+        );
+
+        await writeAuditLog(client, ctx, {
+          action: "contacts.linkedin_import",
+          entityType: "contacts",
+          entityId: contactId,
+          ip: event.headers["x-forwarded-for"] || "local",
+          userAgent: event.headers["user-agent"] || "unknown",
+          metadata: { profileUrl: payload.profileUrl }
+        });
+
+        const detail = await loadContactDetail(client, ctx.orgId, contactId);
+        return json(200, { ok: true, data: detail });
+      }
+
+      case "contact.importCsv": {
+        requireRole(ctx, ["admin", "creator"]);
+        const payload = csvImportSchema.parse(parseBody(event));
+        const actorUserId = await getActorUserId(client, ctx);
+        const rows = parseCsvRows(payload.csvContent)
+          .filter((row) => row.firstName && row.lastName)
+          .slice(0, 200);
+
+        const insertedIds: string[] = [];
+        for (const row of rows) {
+          const inserted = await client.query<{ unique_id: string }>(
+            `
+            insert into contacts (
+              organization_id,
+              first_name,
+              last_name,
+              organization,
+              role,
+              contact_type,
+              status,
+              created_by,
+              updated_by
+            )
+            values ($1, $2, $3, $4, 'Unknown', 'General'::contact_type_enum, 'Prospect'::contact_status_enum, $5, $5)
+            returning unique_id
+            `,
+            [ctx.orgId, row.firstName, row.lastName, row.company || null, actorUserId]
+          );
+          insertedIds.push(inserted.rows[0].unique_id);
+        }
+
+        await writeAuditLog(client, ctx, {
+          action: "contacts.csv_import",
+          entityType: "contacts",
+          ip: event.headers["x-forwarded-for"] || "local",
+          userAgent: event.headers["user-agent"] || "unknown",
+          metadata: { inserted: insertedIds.length }
+        });
+
+        return json(200, {
+          ok: true,
+          data: {
+            insertedCount: insertedIds.length,
+            insertedIds
+          }
+        });
+      }
+
+      case "contact.addComment": {
+        requireRole(ctx, ["admin", "creator", "participant"]);
+        const payload = addCommentSchema.parse(parseBody(event));
+        const actorUserId = await getActorUserId(client, ctx);
+
+        const exists = await client.query<{ unique_id: string }>(
+          "select unique_id from contacts where unique_id = $1 and organization_id = $2 limit 1",
+          [payload.contactId, ctx.orgId]
+        );
+
+        if (!exists.rows[0]) {
+          return json(404, { ok: false, error: { code: "NOT_FOUND", message: "Contact not found" } });
+        }
+
+        const inserted = await client.query<{ id: string; created_at: string }>(
+          `
+          insert into contact_comments (organization_id, contact_id, body, created_by)
+          values ($1, $2, $3, $4)
+          returning id, created_at
+          `,
+          [ctx.orgId, payload.contactId, payload.body, actorUserId]
+        );
+
+        await writeAuditLog(client, ctx, {
+          action: "comments.create",
+          entityType: "contact_comments",
+          entityId: inserted.rows[0].id,
+          ip: event.headers["x-forwarded-for"] || "local",
+          userAgent: event.headers["user-agent"] || "unknown",
+          metadata: { contactId: payload.contactId }
+        });
+
+        return json(201, {
+          ok: true,
+          data: {
+            id: inserted.rows[0].id,
+            body: payload.body,
+            archived: false,
+            createdAt: inserted.rows[0].created_at
+          }
+        });
+      }
+
+      case "contact.archiveComment": {
+        requireRole(ctx, ["admin", "creator"]);
+        const payload = commentIdSchema.parse(parseBody(event));
+
+        const archived = await client.query<{ id: string }>(
+          `
+          update contact_comments
+          set archived = true
+          where id = $1 and organization_id = $2 and deleted_at is null
+          returning id
+          `,
+          [payload.commentId, ctx.orgId]
+        );
+
+        if (!archived.rows[0]) {
+          return json(404, { ok: false, error: { code: "NOT_FOUND", message: "Comment not found" } });
+        }
+
+        await writeAuditLog(client, ctx, {
+          action: "comments.archive",
+          entityType: "contact_comments",
+          entityId: payload.commentId,
+          ip: event.headers["x-forwarded-for"] || "local",
+          userAgent: event.headers["user-agent"] || "unknown"
+        });
+
+        return json(200, { ok: true, data: { archived: true, id: payload.commentId } });
+      }
+
+      case "contact.deleteComment": {
+        requireRole(ctx, ["admin"]);
+        const payload = commentIdSchema.parse(parseBody(event));
+
+        const deleted = await client.query<{ id: string }>(
+          `
+          update contact_comments
+          set deleted_at = now()
+          where id = $1 and organization_id = $2 and deleted_at is null
+          returning id
+          `,
+          [payload.commentId, ctx.orgId]
+        );
+
+        if (!deleted.rows[0]) {
+          return json(404, { ok: false, error: { code: "NOT_FOUND", message: "Comment not found" } });
+        }
+
+        await writeAuditLog(client, ctx, {
+          action: "comments.delete",
+          entityType: "contact_comments",
+          entityId: payload.commentId,
+          ip: event.headers["x-forwarded-for"] || "local",
+          userAgent: event.headers["user-agent"] || "unknown"
+        });
+
+        return json(200, { ok: true, data: { deleted: true, id: payload.commentId } });
+      }
+
+      case "contact.getLinkedInHistory": {
+        requireRole(ctx, ["admin", "creator", "participant"]);
+        const contactId = event.queryStringParameters?.contactId;
+        if (!contactId || !isUuid(contactId)) {
+          return json(400, { ok: false, error: { code: "BAD_REQUEST", message: "Missing or invalid contactId" } });
+        }
+
+        const history = await client.query<DbLinkedInHistory>(
+          `
+          select id, snapshot, captured_at, created_at
+          from linkedin_history
+          where organization_id = $1 and contact_id = $2
+          order by captured_at desc
+          `,
+          [ctx.orgId, contactId]
+        );
+
+        return json(200, {
+          ok: true,
+          data: history.rows.map((item) => ({
+            id: item.id,
+            snapshot: item.snapshot,
+            capturedAt: item.captured_at,
+            createdAt: item.created_at
+          }))
+        });
       }
 
       case "csv/export": {
@@ -590,7 +1225,12 @@ export const handler: Handler = async (event) => {
       return json(500, { ok: false, error: { code: "CONFIG_ERROR", message } });
     }
 
-    if (lower.includes("invalid token") || lower.includes("authorization") || lower.includes("issuer") || lower.includes("audience")) {
+    if (
+      lower.includes("invalid token") ||
+      lower.includes("authorization") ||
+      lower.includes("issuer") ||
+      lower.includes("audience")
+    ) {
       return json(401, { ok: false, error: { code: "UNAUTHORIZED", message } });
     }
 

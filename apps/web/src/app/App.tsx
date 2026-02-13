@@ -4,6 +4,7 @@ import { RouteGuard } from "../components/RouteGuard";
 import { LoginPage } from "../features/auth/LoginPage";
 import { ContactsListPage } from "../features/contacts/ContactsListPage";
 import { ContactCreatePage } from "../features/contacts/ContactCreatePage";
+import { ContactDetailPage } from "../features/contacts/ContactDetailPage";
 import { AdminUsersPage } from "../features/admin/AdminUsersPage";
 
 export function App() {
@@ -25,6 +26,14 @@ export function App() {
           element={
             <RouteGuard allowRoles={["admin", "creator"]}>
               <ContactCreatePage />
+            </RouteGuard>
+          }
+        />
+        <Route
+          path="/contacts/:id"
+          element={
+            <RouteGuard allowRoles={["admin", "creator", "participant"]}>
+              <ContactDetailPage />
             </RouteGuard>
           }
         />
