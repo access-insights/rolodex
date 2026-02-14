@@ -124,9 +124,17 @@ const env = {
 
 const jwks = env.azureJwks ? createRemoteJWKSet(new URL(env.azureJwks)) : null;
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const normalizeDbUrl = (value: string) => {
+  const parsed = new URL(value);
+  parsed.searchParams.delete("sslmode");
+  parsed.searchParams.delete("sslcert");
+  parsed.searchParams.delete("sslkey");
+  parsed.searchParams.delete("sslrootcert");
+  return parsed.toString();
+};
 const pool = env.supabaseDbUrl
   ? new Pool({
-      connectionString: env.supabaseDbUrl,
+      connectionString: normalizeDbUrl(env.supabaseDbUrl),
       ssl: { rejectUnauthorized: false }
     })
   : null;
