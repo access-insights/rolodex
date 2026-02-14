@@ -201,8 +201,11 @@ const verifyToken = async (event: HandlerEvent): Promise<AuthedContext> => {
   const userId = String(payload.sub || "");
   if (!userId) throw new Error("Invalid token subject");
 
-  const orgClaim = String(payload.org_id || env.defaultOrgId || payload.tid || "");
-  if (!orgClaim || !isUuid(orgClaim)) {
+  const orgCandidates = [payload.org_id, env.defaultOrgId, payload.tid]
+    .map((value) => (value === undefined || value === null ? "" : String(value).trim()))
+    .filter(Boolean);
+  const orgClaim = orgCandidates.find((value) => isUuid(value)) || "";
+  if (!orgClaim) {
     throw new Error("Invalid organization context");
   }
 
