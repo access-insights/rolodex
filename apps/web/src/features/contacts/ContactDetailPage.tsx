@@ -102,6 +102,44 @@ const toFormState = (detail: ContactDetail): ContactFormState => ({
   websites: detail.websites.length > 0 ? detail.websites : [emptyMethod()]
 });
 
+function ViewField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="contact-view-field">
+      <p className="contact-view-label">{label}</p>
+      <p className="contact-view-value">{value || "-"}</p>
+    </div>
+  );
+}
+
+function MethodsView({
+  label,
+  emptyText,
+  items
+}: {
+  label: string;
+  emptyText: string;
+  items: ContactMethod[];
+}) {
+  const filled = items.filter((item) => item.value.trim().length > 0);
+
+  return (
+    <section className="contact-card" aria-label={label}>
+      <h3 className="contact-section-title">{label}</h3>
+      {filled.length === 0 ? <p className="contact-empty-text">{emptyText}</p> : null}
+      {filled.length > 0 ? (
+        <ul className="contact-method-list">
+          {filled.map((item, index) => (
+            <li key={`${label}-${index}`} className="contact-method-item">
+              <span className="contact-method-label">{item.label || "Other"}</span>
+              <span className="contact-method-value">{item.value}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 function MethodsEditor({
   label,
   labelOptions,
@@ -124,8 +162,8 @@ function MethodsEditor({
   onValueBlur?: (index: number, value: string) => void;
 }) {
   return (
-    <section className="rounded border border-border bg-surface p-4" aria-label={label}>
-      <h3 className="mb-3 text-lg font-semibold">{label}</h3>
+    <section className="contact-card" aria-label={label}>
+      <h3 className="contact-section-title">{label}</h3>
       <div className="space-y-3">
         {items.map((item, index) => (
           <div key={`${label}-${index}`} className="grid gap-2 md:grid-cols-2">
@@ -190,6 +228,7 @@ export function ContactDetailPage() {
     const all = detail?.comments ?? [];
     return all.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [detail]);
+  const detailAttributes = useMemo(() => normalizeAttributes(detail?.attributes), [detail?.attributes]);
 
   useEffect(() => {
     if (!id) return;
@@ -429,15 +468,13 @@ export function ContactDetailPage() {
   }
 
   return (
-    <section aria-labelledby="contact-title" className="space-y-4">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <section aria-labelledby="contact-title" className="contact-page space-y-4">
+      <header className="contact-card contact-header-card">
         <div>
-          <h1 id="contact-title" className="text-2xl font-semibold">
+          <h1 id="contact-title" className="contact-name">
             {detail.lastName}, {detail.firstName}
           </h1>
-          <p className="text-sm text-muted">
-            Record entered by: {detail.recordEnteredBy || "Unknown user"}
-          </p>
+          <p className="contact-meta">Record entered by: {detail.recordEnteredBy || "Unknown user"}</p>
         </div>
         {canEdit ? (
           <button className="btn" onClick={() => setEditing((value) => !value)} aria-label="Edit contact">
@@ -446,182 +483,221 @@ export function ContactDetailPage() {
         ) : null}
       </header>
 
-      <section className="grid gap-3 rounded border border-border bg-surface p-4 md:grid-cols-2" aria-label="Summary Fields">
-        <label>
-          <span className="mb-1 block text-sm text-muted">First Name</span>
-          <input className="input" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} disabled={!editing} />
-        </label>
-        <label>
-          <span className="mb-1 block text-sm text-muted">Last Name</span>
-          <input className="input" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} disabled={!editing} />
-        </label>
-        <label>
-          <span className="mb-1 block text-sm text-muted">Company</span>
-          <input className="input" value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} disabled={!editing} />
-        </label>
-        <label>
-          <span className="mb-1 block text-sm text-muted">Role</span>
-          <input className="input" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} disabled={!editing} />
-        </label>
-        <label>
-          <span className="mb-1 block text-sm text-muted">Type</span>
-          <select
-            className="input"
-            value={form.contactType}
-            onChange={(event) => setForm({ ...form, contactType: event.target.value as ContactType | "" })}
-            disabled={!editing}
-          >
-            <option value="" disabled>
-              Select type
-            </option>
-            {typeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="mb-1 block text-sm text-muted">Status</span>
-          <select
-            className="input"
-            value={form.status}
-            onChange={(event) => setForm({ ...form, status: event.target.value as ContactStatus | "" })}
-            disabled={!editing}
-          >
-            <option value="" disabled>
-              Select status
-            </option>
-            {statusOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="mb-1 block text-sm text-muted">Internal Contact</span>
-          <input className="input" value={form.internalContact} onChange={(event) => setForm({ ...form, internalContact: event.target.value })} disabled={!editing} />
-        </label>
-        <label>
-          <span className="mb-1 block text-sm text-muted">Referred By</span>
-          <input
-            className="input"
-            value={form.referredBy}
-            onChange={(event) =>
-              setForm({
-                ...form,
-                referredBy: event.target.value,
-                referredByContactId: ""
-              })
-            }
-            onInput={() => setReferredByMatches([])}
-            disabled={!editing}
-            role="combobox"
-            aria-autocomplete="list"
-            aria-expanded={editing && referredByMatches.length > 0}
-            aria-controls="referred-by-suggestions"
-          />
-          {editing ? (
-            <div className="mt-2 rounded border border-border bg-canvas p-2">
-              {referredByLoading ? <p className="text-xs text-muted">Loading suggestions...</p> : null}
-              {!referredByLoading && referredByMatches.length === 0 && form.referredBy.trim() ? (
-                <p className="text-xs text-muted">No matching contacts.</p>
-              ) : null}
-              {!referredByLoading && referredByMatches.length > 0 ? (
-                <ul id="referred-by-suggestions" className="space-y-1" aria-label="Referred by suggestions">
-                  {referredByMatches.map((contact) => (
-                    <li key={contact.id}>
-                      <button
-                        type="button"
-                        className="nav-link w-full text-left"
-                        onClick={() =>
-                          setForm((prev) => {
-                            if (!prev) return prev;
-                            return {
-                              ...prev,
-                              referredBy: `${contact.firstName} ${contact.lastName}`,
-                              referredByContactId: contact.id
-                            };
-                          })
-                        }
-                      >
-                        {contact.lastName}, {contact.firstName}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-        </label>
-      </section>
-
-      <section className="rounded border border-border bg-surface p-4" aria-label="Attributes">
-        <h2 className="text-xl font-semibold">Attributes</h2>
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          {attributeOptions.map((attribute) => (
-            <label key={attribute} className="inline-flex items-center gap-2">
+      <section className="contact-card" aria-label="Summary Fields">
+        {editing ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            <label>
+              <span className="mb-1 block text-sm text-muted">First Name</span>
+              <input className="input" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Last Name</span>
+              <input className="input" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Company</span>
+              <input className="input" value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Role</span>
+              <input className="input" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Type</span>
+              <select
+                className="input"
+                value={form.contactType}
+                onChange={(event) => setForm({ ...form, contactType: event.target.value as ContactType | "" })}
+              >
+                <option value="" disabled>
+                  Select type
+                </option>
+                {typeOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Status</span>
+              <select
+                className="input"
+                value={form.status}
+                onChange={(event) => setForm({ ...form, status: event.target.value as ContactStatus | "" })}
+              >
+                <option value="" disabled>
+                  Select status
+                </option>
+                {statusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Internal Contact</span>
+              <input className="input" value={form.internalContact} onChange={(event) => setForm({ ...form, internalContact: event.target.value })} />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">LinkedIn Profile URL</span>
+              <input className="input" value={form.linkedInProfileUrl} onChange={(event) => setForm({ ...form, linkedInProfileUrl: event.target.value })} />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Referred By</span>
               <input
-                type="checkbox"
-                checked={form.attributes.includes(attribute)}
-                disabled={!editing}
+                className="input"
+                value={form.referredBy}
                 onChange={(event) =>
-                  setForm((prev) => {
-                    if (!prev) return prev;
-                    const set = new Set(prev.attributes);
-                    if (event.target.checked) {
-                      set.add(attribute);
-                    } else {
-                      set.delete(attribute);
-                    }
-                    return { ...prev, attributes: Array.from(set) };
+                  setForm({
+                    ...form,
+                    referredBy: event.target.value,
+                    referredByContactId: ""
                   })
                 }
+                onInput={() => setReferredByMatches([])}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={referredByMatches.length > 0}
+                aria-controls="referred-by-suggestions"
               />
-              <span>{attribute}</span>
+              <div className="mt-2 rounded border border-border bg-canvas p-2">
+                {referredByLoading ? <p className="text-xs text-muted">Loading suggestions...</p> : null}
+                {!referredByLoading && referredByMatches.length === 0 && form.referredBy.trim() ? (
+                  <p className="text-xs text-muted">No matching contacts.</p>
+                ) : null}
+                {!referredByLoading && referredByMatches.length > 0 ? (
+                  <ul id="referred-by-suggestions" className="space-y-1" aria-label="Referred by suggestions">
+                    {referredByMatches.map((contact) => (
+                      <li key={contact.id}>
+                        <button
+                          type="button"
+                          className="nav-link w-full text-left"
+                          onClick={() =>
+                            setForm((prev) => {
+                              if (!prev) return prev;
+                              return {
+                                ...prev,
+                                referredBy: `${contact.firstName} ${contact.lastName}`,
+                                referredByContactId: contact.id
+                              };
+                            })
+                          }
+                        >
+                          {contact.lastName}, {contact.firstName}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </label>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <>
+            <div className="contact-view-grid">
+              <ViewField label="Company" value={detail.company || "-"} />
+              <ViewField label="Role" value={detail.role || "-"} />
+              <ViewField label="Status" value={detail.status || "-"} />
+            </div>
+            <div className="contact-view-grid mt-3">
+              <ViewField label="Internal Contact" value={detail.internalContact || "-"} />
+              <ViewField
+                label="Referred By"
+                value={detail.referredByContact ? `${detail.referredByContact.firstName} ${detail.referredByContact.lastName}` : detail.referredBy || "-"}
+              />
+              <ViewField label="LinkedIn" value={detail.linkedInProfileUrl || "-"} />
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="contact-card" aria-label="Attributes">
+        <h2 className="contact-section-title">Attributes</h2>
+        {editing ? (
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {attributeOptions.map((attribute) => (
+              <label key={attribute} className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.attributes.includes(attribute)}
+                  onChange={(event) =>
+                    setForm((prev) => {
+                      if (!prev) return prev;
+                      const set = new Set(prev.attributes);
+                      if (event.target.checked) {
+                        set.add(attribute);
+                      } else {
+                        set.delete(attribute);
+                      }
+                      return { ...prev, attributes: Array.from(set) };
+                    })
+                  }
+                />
+                <span>{attribute}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <div className="contact-chip-list">
+            {detailAttributes.length === 0 ? <p className="contact-empty-text">No attributes assigned.</p> : null}
+            {detailAttributes.map((attribute) => (
+              <span key={attribute} className="contact-chip">
+                {attribute}
+              </span>
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <MethodsEditor
-          label="Phone Numbers"
-          labelOptions={phoneLabelOptions}
-          valueType="tel"
-          items={form.phones}
-          disabled={!editing}
-          onChange={(index, field, value) => setMethodField("phones", index, field, value)}
-          onAdd={() => addMethod("phones")}
-          addActionLabel="Add New Number"
-          onValueBlur={(index, value) => setMethodField("phones", index, "value", formatPhoneNumber(value))}
-        />
-        <MethodsEditor
-          label="Email Addresses"
-          labelOptions={emailLabelOptions}
-          valueType="email"
-          items={form.emails}
-          disabled={!editing}
-          onChange={(index, field, value) => setMethodField("emails", index, field, value)}
-          onAdd={() => addMethod("emails")}
-          addActionLabel="Add New Email"
-        />
-        <MethodsEditor
-          label="Websites"
-          labelOptions={websiteLabelOptions}
-          valueType="url"
-          items={form.websites}
-          disabled={!editing}
-          onChange={(index, field, value) => setMethodField("websites", index, field, value)}
-          onAdd={() => addMethod("websites")}
-          addActionLabel="Add New Website"
-        />
+        {editing ? (
+          <>
+            <MethodsEditor
+              label="Phone Numbers"
+              labelOptions={phoneLabelOptions}
+              valueType="tel"
+              items={form.phones}
+              disabled={false}
+              onChange={(index, field, value) => setMethodField("phones", index, field, value)}
+              onAdd={() => addMethod("phones")}
+              addActionLabel="Add New Number"
+              onValueBlur={(index, value) => setMethodField("phones", index, "value", formatPhoneNumber(value))}
+            />
+            <MethodsEditor
+              label="Email Addresses"
+              labelOptions={emailLabelOptions}
+              valueType="email"
+              items={form.emails}
+              disabled={false}
+              onChange={(index, field, value) => setMethodField("emails", index, field, value)}
+              onAdd={() => addMethod("emails")}
+              addActionLabel="Add New Email"
+            />
+            <MethodsEditor
+              label="Websites"
+              labelOptions={websiteLabelOptions}
+              valueType="url"
+              items={form.websites}
+              disabled={false}
+              onChange={(index, field, value) => setMethodField("websites", index, field, value)}
+              onAdd={() => addMethod("websites")}
+              addActionLabel="Add New Website"
+            />
+          </>
+        ) : (
+          <>
+            <MethodsView label="Phone Number" emptyText="No phone numbers added" items={detail.phones} />
+            <MethodsView label="Email Addresses" emptyText="No email addresses added" items={detail.emails} />
+            <MethodsView label="Website" emptyText="No websites added" items={detail.websites} />
+          </>
+        )}
       </div>
 
-      <section className="rounded border border-border bg-surface p-4" aria-label="Referrals">
-        <h2 className="text-xl font-semibold">Referrals</h2>
-        {detail.referrals.length === 0 ? <p className="mt-2 text-muted">No referrals linked to this contact.</p> : null}
+      <section className="contact-card" aria-label="Referrals">
+        <h2 className="contact-section-title">Referrals</h2>
+        {detail.referrals.length === 0 ? <p className="contact-empty-text">No referrals linked to this contact.</p> : null}
         <ul className="mt-2 space-y-1">
           {detail.referrals.map((referral) => (
             <li key={referral.id}>
@@ -633,8 +709,8 @@ export function ContactDetailPage() {
         </ul>
       </section>
 
-      <section className="rounded border border-border bg-surface p-4" aria-label="Comments">
-        <h2 className="text-xl font-semibold">Comments</h2>
+      <section className="contact-card" aria-label="Comments">
+        <h2 className="contact-section-title">Comments</h2>
         <form className="mt-3 flex flex-col gap-2" onSubmit={(event) => void onAddComment(event)}>
           <textarea
             className="input min-h-24"
@@ -650,7 +726,7 @@ export function ContactDetailPage() {
 
         <ul className="mt-4 space-y-2">
           {visibleComments.map((comment) => (
-            <li key={comment.id} className="rounded border border-border p-3">
+            <li key={comment.id} className="contact-comment-item">
               <p className="text-xs text-muted">
                 {new Date(comment.createdAt).toLocaleString()} by {comment.authorDisplayName || "Unknown user"}
               </p>
@@ -674,21 +750,33 @@ export function ContactDetailPage() {
       </section>
 
       <footer className="flex flex-wrap gap-2 border-t border-border pt-4">
-        <button type="button" className="btn" onClick={() => void save(false)} disabled={!canEdit || !editing}>
-          Save
-        </button>
-        <button type="button" className="btn" onClick={() => void save(true)} disabled={!canEdit || !editing}>
-          Save &amp; Close
-        </button>
+        {editing ? (
+          <>
+            <button type="button" className="btn" onClick={() => void save(false)} disabled={!canEdit}>
+              Save
+            </button>
+            <button type="button" className="btn" onClick={() => void save(true)} disabled={!canEdit}>
+              Save &amp; Close
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setForm(toFormState(detail));
+                setEditing(false);
+                setStatusMessage("Changes canceled.");
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn" onClick={() => navigate("/contacts")}>
+            Back to Contacts
+          </button>
+        )}
         <button type="button" className="btn" onClick={() => setConfirmArchive(true)} disabled={!canEdit}>
           Archive
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => navigate("/contacts")}
-        >
-          Cancel
         </button>
         {isAdmin ? (
           <button type="button" className="btn" onClick={() => setConfirmDelete(true)}>

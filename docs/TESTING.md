@@ -24,4 +24,4 @@ npm run test:e2e
   - New comment is created and displayed.
 
 ## CI
-GitHub Actions runs lint, unit tests, and accessibility tests on pushes to `main` and pull requests.
+GitHub Actions runs lint, unit tests, accessibility tests, build, and Playwright e2e tests on every push and pull request.

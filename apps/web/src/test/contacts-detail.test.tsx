@@ -75,8 +75,8 @@ describe("Contact detail page", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /price, jordan/i })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Jordan")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Bright Path Advisors")).toBeInTheDocument();
+    expect(screen.getByText("Bright Path Advisors")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /first name/i })).not.toBeInTheDocument();
   });
 
   it("adds a comment and updates visible comments", async () => {

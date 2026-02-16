@@ -4,6 +4,7 @@
 - Node.js 20+
 - npm 10+
 - Netlify CLI (installed as project dependency)
+- `psql` CLI (Postgres client)
 
 ## Install
 ```bash
@@ -16,6 +17,20 @@ npm run install:all
 2. Fill in Supabase and Azure values.
 3. Set `DEFAULT_ORG_ID` to a UUID that already exists in `organizations.id`.
 4. Keep `.env` local only.
+
+## Initialize database
+Apply schema migrations, then seed data:
+
+```bash
+npm run db:migrate
+npm run db:seed
+```
+
+Or run both in one command:
+
+```bash
+npm run db:setup
+```
 
 ### Local auth + org checks
 - Local frontend redirects should stay on `http://localhost:8888`:

@@ -18,6 +18,9 @@
     "test": "npm run test --workspace apps/web",
     "test:a11y": "npm run test:a11y --workspace apps/web",
     "test:e2e": "playwright test",
+    "db:migrate": "bash scripts/db-migrate.sh",
+    "db:seed": "bash scripts/db-seed.sh",
+    "db:setup": "npm run db:migrate && npm run db:seed",
     "install:all": "npm install --workspaces --include-workspace-root"
   },
   "dependencies": {

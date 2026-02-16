@@ -19,6 +19,8 @@ export function AppShell({ children }: AppShellProps) {
     return <main id="main-content">{children}</main>;
   }
 
+  const userLabel = user.email ?? user.id;
+
   return (
     <div className="min-h-screen bg-canvas text-text">
       <a
@@ -28,21 +30,26 @@ export function AppShell({ children }: AppShellProps) {
         Skip to content
       </a>
 
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <p className="text-lg font-semibold">Rolodex</p>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted">{user.email ?? user.id}</span>
-            <button className="btn" onClick={logout}>
-              Sign Out
+      <header className="app-shell-header">
+        <div className="app-shell-top-row">
+          <div className="app-shell-brand">
+            <span className="app-shell-brand-icon" aria-hidden="true">
+              R
+            </span>
+            <p className="app-shell-brand-text">Rolodex</p>
+          </div>
+          <div className="app-shell-account-row">
+            <span className="app-shell-user">{userLabel}</span>
+            <button className="btn app-shell-signout" onClick={logout}>
+              Sign Out <span aria-hidden="true">v</span>
             </button>
           </div>
         </div>
-        <nav aria-label="Primary" className="mx-auto max-w-6xl px-4 pb-3">
-          <ul className="flex flex-wrap gap-2">
+        <nav aria-label="Primary" className="app-shell-nav-wrap">
+          <ul className="app-shell-nav-list">
             {navItems.map((item) => (
               <li key={item.to}>
-                <NavLink className={({ isActive }) => `nav-link ${isActive ? "nav-link-active" : ""}`} to={item.to}>
+                <NavLink className={({ isActive }) => `app-shell-tab ${isActive ? "app-shell-tab-active" : ""}`} to={item.to}>
                   {item.label}
                 </NavLink>
               </li>
@@ -51,7 +58,7 @@ export function AppShell({ children }: AppShellProps) {
         </nav>
       </header>
 
-      <main id="main-content" className="mx-auto max-w-6xl px-4 py-6" tabIndex={-1}>
+      <main id="main-content" className="mx-auto max-w-6xl px-4 py-7" tabIndex={-1}>
         {children}
       </main>
     </div>
