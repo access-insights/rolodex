@@ -743,6 +743,112 @@ export function ContactDetailPage() {
                 ) : null}
               </div>
             </label>
+          </div>
+        ) : (
+          <>
+            <div className="contact-view-grid">
+              <ViewField label="Company" value={detail.company || "-"} />
+              <ViewField label="Role" value={detail.role || "-"} />
+              <ViewField label="Status" value={detail.status || "-"} />
+            </div>
+            <div className="contact-view-grid mt-3">
+              <ViewField label="Internal Contact" value={detail.internalContact || "-"} />
+              <ViewField
+                label="Referred By"
+                value={detail.referredByContact ? `${detail.referredByContact.firstName} ${detail.referredByContact.lastName}` : detail.referredBy || "-"}
+              />
+              <ViewField label="LinkedIn" value={detail.linkedInProfileUrl || "-"} />
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="contact-card" aria-label="Attributes">
+        <h2 className="contact-section-title">Attributes</h2>
+        {editing ? (
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {attributeOptions.map((attribute) => (
+              <label key={attribute} className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.attributes.includes(attribute)}
+                  onChange={(event) =>
+                    setForm((prev) => {
+                      if (!prev) return prev;
+                      const set = new Set(prev.attributes);
+                      if (event.target.checked) {
+                        set.add(attribute);
+                      } else {
+                        set.delete(attribute);
+                      }
+                      return { ...prev, attributes: Array.from(set) };
+                    })
+                  }
+                />
+                <span>{attribute}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <div className="contact-chip-list">
+            {detailAttributes.length === 0 ? <p className="contact-empty-text">No attributes assigned.</p> : null}
+            {detailAttributes.map((attribute) => (
+              <span key={attribute} className="contact-chip">
+                {attribute}
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {editing ? (
+          <>
+            <MethodsEditor
+              label="Phone Numbers"
+              labelOptions={phoneLabelOptions}
+              valueType="tel"
+              items={form.phones}
+              disabled={false}
+              onChange={(index, field, value) => setMethodField("phones", index, field, value)}
+              onAdd={() => addMethod("phones")}
+              addActionLabel="Add New Number"
+              onValueBlur={(index, value) => setMethodField("phones", index, "value", formatPhoneNumber(value))}
+            />
+            <MethodsEditor
+              label="Email Addresses"
+              labelOptions={emailLabelOptions}
+              valueType="email"
+              items={form.emails}
+              disabled={false}
+              onChange={(index, field, value) => setMethodField("emails", index, field, value)}
+              onAdd={() => addMethod("emails")}
+              addActionLabel="Add New Email"
+            />
+            <MethodsEditor
+              label="Websites"
+              labelOptions={websiteLabelOptions}
+              valueType="url"
+              items={form.websites}
+              disabled={false}
+              onChange={(index, field, value) => setMethodField("websites", index, field, value)}
+              onAdd={() => addMethod("websites")}
+              addActionLabel="Add New Website"
+            />
+          </>
+        ) : (
+          <>
+            <MethodsView label="Phone Number" emptyText="No phone numbers added" items={detail.phones} />
+            <MethodsView label="Email Addresses" emptyText="No email addresses added" items={detail.emails} />
+            <MethodsView label="Website" emptyText="No websites added" items={detail.websites} />
+          </>
+        )}
+      </div>
+
+      <section className="contact-card" aria-label="Addresses">
+        <h2 className="contact-section-title">Addresses</h2>
+        {editing ? (
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
             <p className="text-sm font-semibold md:col-span-2">Billing Address</p>
             <label className="md:col-span-2">
               <span className="mb-1 block text-sm text-muted">Address Line 1</span>
@@ -910,141 +1016,40 @@ export function ContactDetailPage() {
             </label>
           </div>
         ) : (
-          <>
-            <div className="contact-view-grid">
-              <ViewField label="Company" value={detail.company || "-"} />
-              <ViewField label="Role" value={detail.role || "-"} />
-              <ViewField label="Status" value={detail.status || "-"} />
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded border border-border bg-canvas p-3">
+              <p className="text-sm text-muted">Billing Address</p>
+              <p className="mt-2 whitespace-pre-wrap">
+                {[
+                  detail.billingAddressLine1,
+                  detail.billingAddressLine2,
+                  [detail.billingCity, detail.billingState, detail.billingZipCode].filter(Boolean).join(", ")
+                ]
+                  .filter((line) => Boolean(line && line.trim()))
+                  .join("\n") || "-"}
+              </p>
             </div>
-            <div className="contact-view-grid mt-3">
-              <ViewField label="Internal Contact" value={detail.internalContact || "-"} />
-              <ViewField
-                label="Referred By"
-                value={detail.referredByContact ? `${detail.referredByContact.firstName} ${detail.referredByContact.lastName}` : detail.referredBy || "-"}
-              />
-              <ViewField label="LinkedIn" value={detail.linkedInProfileUrl || "-"} />
+            <div className="rounded border border-border bg-canvas p-3">
+              <p className="text-sm text-muted">Shipping Address</p>
+              <p className="mt-2 whitespace-pre-wrap">
+                {(detail.shippingSameAsBilling
+                  ? [
+                      detail.billingAddressLine1,
+                      detail.billingAddressLine2,
+                      [detail.billingCity, detail.billingState, detail.billingZipCode].filter(Boolean).join(", ")
+                    ]
+                  : [
+                      detail.shippingAddressLine1,
+                      detail.shippingAddressLine2,
+                      [detail.shippingCity, detail.shippingState, detail.shippingZipCode].filter(Boolean).join(", ")
+                    ]
+                )
+                  .filter((line) => Boolean(line && line.trim()))
+                  .join("\n") || "-"}
+              </p>
             </div>
-          </>
-        )}
-      </section>
-
-      <section className="contact-card" aria-label="Attributes">
-        <h2 className="contact-section-title">Attributes</h2>
-        {editing ? (
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {attributeOptions.map((attribute) => (
-              <label key={attribute} className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.attributes.includes(attribute)}
-                  onChange={(event) =>
-                    setForm((prev) => {
-                      if (!prev) return prev;
-                      const set = new Set(prev.attributes);
-                      if (event.target.checked) {
-                        set.add(attribute);
-                      } else {
-                        set.delete(attribute);
-                      }
-                      return { ...prev, attributes: Array.from(set) };
-                    })
-                  }
-                />
-                <span>{attribute}</span>
-              </label>
-            ))}
-          </div>
-        ) : (
-          <div className="contact-chip-list">
-            {detailAttributes.length === 0 ? <p className="contact-empty-text">No attributes assigned.</p> : null}
-            {detailAttributes.map((attribute) => (
-              <span key={attribute} className="contact-chip">
-                {attribute}
-              </span>
-            ))}
           </div>
         )}
-      </section>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        {editing ? (
-          <>
-            <MethodsEditor
-              label="Phone Numbers"
-              labelOptions={phoneLabelOptions}
-              valueType="tel"
-              items={form.phones}
-              disabled={false}
-              onChange={(index, field, value) => setMethodField("phones", index, field, value)}
-              onAdd={() => addMethod("phones")}
-              addActionLabel="Add New Number"
-              onValueBlur={(index, value) => setMethodField("phones", index, "value", formatPhoneNumber(value))}
-            />
-            <MethodsEditor
-              label="Email Addresses"
-              labelOptions={emailLabelOptions}
-              valueType="email"
-              items={form.emails}
-              disabled={false}
-              onChange={(index, field, value) => setMethodField("emails", index, field, value)}
-              onAdd={() => addMethod("emails")}
-              addActionLabel="Add New Email"
-            />
-            <MethodsEditor
-              label="Websites"
-              labelOptions={websiteLabelOptions}
-              valueType="url"
-              items={form.websites}
-              disabled={false}
-              onChange={(index, field, value) => setMethodField("websites", index, field, value)}
-              onAdd={() => addMethod("websites")}
-              addActionLabel="Add New Website"
-            />
-          </>
-        ) : (
-          <>
-            <MethodsView label="Phone Number" emptyText="No phone numbers added" items={detail.phones} />
-            <MethodsView label="Email Addresses" emptyText="No email addresses added" items={detail.emails} />
-            <MethodsView label="Website" emptyText="No websites added" items={detail.websites} />
-          </>
-        )}
-      </div>
-
-      <section className="contact-card" aria-label="Addresses">
-        <h2 className="contact-section-title">Addresses</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div className="rounded border border-border bg-canvas p-3">
-            <p className="text-sm text-muted">Billing Address</p>
-            <p className="mt-2 whitespace-pre-wrap">
-              {[
-                detail.billingAddressLine1,
-                detail.billingAddressLine2,
-                [detail.billingCity, detail.billingState, detail.billingZipCode].filter(Boolean).join(", ")
-              ]
-                .filter((line) => Boolean(line && line.trim()))
-                .join("\n") || "-"}
-            </p>
-          </div>
-          <div className="rounded border border-border bg-canvas p-3">
-            <p className="text-sm text-muted">Shipping Address</p>
-            <p className="mt-2 whitespace-pre-wrap">
-              {(detail.shippingSameAsBilling
-                ? [
-                    detail.billingAddressLine1,
-                    detail.billingAddressLine2,
-                    [detail.billingCity, detail.billingState, detail.billingZipCode].filter(Boolean).join(", ")
-                  ]
-                : [
-                    detail.shippingAddressLine1,
-                    detail.shippingAddressLine2,
-                    [detail.shippingCity, detail.shippingState, detail.shippingZipCode].filter(Boolean).join(", ")
-                  ]
-              )
-                .filter((line) => Boolean(line && line.trim()))
-                .join("\n") || "-"}
-            </p>
-          </div>
-        </div>
       </section>
 
       <section className="contact-card" aria-label="Referrals">

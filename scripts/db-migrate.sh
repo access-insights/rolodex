@@ -21,6 +21,7 @@ MIGRATIONS=(
   "005_contact_attributes_search.sql"
   "006_contact_addresses.sql"
   "007_contact_address_parts.sql"
+  "008_drop_legacy_contact_address_columns.sql"
 )
 
 for file in "${MIGRATIONS[@]}"; do
