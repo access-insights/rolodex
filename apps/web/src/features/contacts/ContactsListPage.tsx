@@ -141,12 +141,12 @@ export function ContactsListPage() {
 
   return (
     <section aria-labelledby="contacts-title" className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header className="contacts-page-header">
         <h1 id="contacts-title" className="text-2xl font-semibold">
           Contacts
         </h1>
         <div className="relative">
-          <button type="button" className="btn" onClick={() => setCsvOpen(true)}>
+          <button type="button" className="btn contacts-import-btn" onClick={() => setCsvOpen(true)}>
             Import from .csv
           </button>
         </div>

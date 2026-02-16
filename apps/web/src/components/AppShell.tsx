@@ -12,6 +12,16 @@ const navItems = [
   { to: "/admin/users", label: "Admin Users" }
 ];
 
+const toDisplayName = (emailOrId: string) => {
+  const source = emailOrId.includes("@") ? emailOrId.split("@")[0] : emailOrId;
+  const cleaned = source.replace(/[._-]+/g, " ").trim();
+  if (!cleaned) return "User";
+  return cleaned
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
 export function AppShell({ children }: AppShellProps) {
   const { user, logout } = useAuth();
 
@@ -19,7 +29,7 @@ export function AppShell({ children }: AppShellProps) {
     return <main id="main-content">{children}</main>;
   }
 
-  const userLabel = user.email ?? user.id;
+  const userLabel = toDisplayName(user.email ?? user.id);
 
   return (
     <div className="min-h-screen bg-canvas text-text">
