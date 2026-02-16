@@ -26,6 +26,7 @@ export function ContactsListPage() {
   const isAdmin = user?.role === "admin";
 
   const loadContacts = async (searchTerm = "") => {
+    setStatusMessage("Loading contacts...");
     const result = await apiClient.listContacts(searchTerm);
     if (!result.ok || !result.data) {
       setStatusMessage(result.error?.message || "Unable to load contacts.");
@@ -174,9 +175,25 @@ export function ContactsListPage() {
           </div>
 
           <label className="inline-flex items-center gap-2">
-            <input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(event) => {
+                setIncludeArchived(event.target.checked);
+                void loadContacts(search);
+              }}
+            />
             <span>Include archived</span>
           </label>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              void loadContacts(search);
+            }}
+          >
+            Refresh list
+          </button>
         </section>
 
         <nav aria-label="Alphabet navigation" className="lg:col-span-2">

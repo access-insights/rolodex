@@ -371,7 +371,25 @@ export function ContactDetailPage() {
       setStatusMessage("Type is required before archiving.");
       return;
     }
-    const payload = { ...form, id, contactType: form.contactType as ContactType, status: "Archived" as const };
+    const payload = {
+      id,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      company: form.company,
+      role: form.role,
+      contactType: form.contactType as ContactType,
+      status: "Archived" as const,
+      internalContact: form.internalContact,
+      referredBy: form.referredBy,
+      referredByContactId: form.referredByContactId || undefined,
+      linkedInProfileUrl: form.linkedInProfileUrl || undefined,
+      attributes: form.attributes,
+      phones: form.phones
+        .map((entry) => ({ ...entry, value: formatPhoneNumber(entry.value) }))
+        .filter((entry) => entry.value.trim().length > 0),
+      emails: form.emails.filter((entry) => entry.value.trim().length > 0),
+      websites: form.websites.filter((entry) => entry.value.trim().length > 0)
+    };
     const result = await apiClient.updateContact(payload);
     setConfirmArchive(false);
     if (!result.ok || !result.data) {
@@ -669,11 +687,7 @@ export function ContactDetailPage() {
         <button
           type="button"
           className="btn"
-          onClick={() => {
-            setForm(toFormState(detail));
-            setEditing(false);
-            setStatusMessage("Changes canceled.");
-          }}
+          onClick={() => navigate("/contacts")}
         >
           Cancel
         </button>
