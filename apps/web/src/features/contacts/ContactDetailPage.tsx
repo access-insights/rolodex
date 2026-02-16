@@ -23,8 +23,16 @@ type ContactFormState = {
   referredBy: string;
   referredByContactId: string;
   linkedInProfileUrl: string;
-  billingAddress: string;
-  shippingAddress: string;
+  billingAddressLine1: string;
+  billingAddressLine2: string;
+  billingCity: string;
+  billingState: string;
+  billingZipCode: string;
+  shippingAddressLine1: string;
+  shippingAddressLine2: string;
+  shippingCity: string;
+  shippingState: string;
+  shippingZipCode: string;
   shippingSameAsBilling: boolean;
   attributes: ContactAttribute[];
   phones: ContactMethod[];
@@ -111,8 +119,16 @@ const toFormState = (detail: ContactDetail): ContactFormState => ({
   referredBy: detail.referredByContact ? `${detail.referredByContact.firstName} ${detail.referredByContact.lastName}` : detail.referredBy ?? "",
   referredByContactId: detail.referredByContactId ?? "",
   linkedInProfileUrl: detail.linkedInProfileUrl ?? "",
-  billingAddress: detail.billingAddress ?? "",
-  shippingAddress: detail.shippingAddress ?? "",
+  billingAddressLine1: detail.billingAddressLine1 ?? "",
+  billingAddressLine2: detail.billingAddressLine2 ?? "",
+  billingCity: detail.billingCity ?? "",
+  billingState: detail.billingState ?? "",
+  billingZipCode: detail.billingZipCode ?? "",
+  shippingAddressLine1: detail.shippingAddressLine1 ?? "",
+  shippingAddressLine2: detail.shippingAddressLine2 ?? "",
+  shippingCity: detail.shippingCity ?? "",
+  shippingState: detail.shippingState ?? "",
+  shippingZipCode: detail.shippingZipCode ?? "",
   shippingSameAsBilling: Boolean(detail.shippingSameAsBilling),
   attributes: normalizeAttributes(detail.attributes),
   phones: detail.phones.length > 0 ? detail.phones : [emptyMethod()],
@@ -418,8 +434,16 @@ export function ContactDetailPage() {
       referredBy: resolvedReferredBy,
       referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: form.linkedInProfileUrl || undefined,
-      billingAddress: form.billingAddress || undefined,
-      shippingAddress: (form.shippingSameAsBilling ? form.billingAddress : form.shippingAddress) || undefined,
+      billingAddressLine1: form.billingAddressLine1 || undefined,
+      billingAddressLine2: form.billingAddressLine2 || undefined,
+      billingCity: form.billingCity || undefined,
+      billingState: form.billingState || undefined,
+      billingZipCode: form.billingZipCode || undefined,
+      shippingAddressLine1: (form.shippingSameAsBilling ? form.billingAddressLine1 : form.shippingAddressLine1) || undefined,
+      shippingAddressLine2: (form.shippingSameAsBilling ? form.billingAddressLine2 : form.shippingAddressLine2) || undefined,
+      shippingCity: (form.shippingSameAsBilling ? form.billingCity : form.shippingCity) || undefined,
+      shippingState: (form.shippingSameAsBilling ? form.billingState : form.shippingState) || undefined,
+      shippingZipCode: (form.shippingSameAsBilling ? form.billingZipCode : form.shippingZipCode) || undefined,
       shippingSameAsBilling: form.shippingSameAsBilling,
       attributes: form.attributes,
       phones: form.phones
@@ -521,8 +545,16 @@ export function ContactDetailPage() {
       referredBy: resolvedReferredBy,
       referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: form.linkedInProfileUrl || undefined,
-      billingAddress: form.billingAddress || undefined,
-      shippingAddress: (form.shippingSameAsBilling ? form.billingAddress : form.shippingAddress) || undefined,
+      billingAddressLine1: form.billingAddressLine1 || undefined,
+      billingAddressLine2: form.billingAddressLine2 || undefined,
+      billingCity: form.billingCity || undefined,
+      billingState: form.billingState || undefined,
+      billingZipCode: form.billingZipCode || undefined,
+      shippingAddressLine1: (form.shippingSameAsBilling ? form.billingAddressLine1 : form.shippingAddressLine1) || undefined,
+      shippingAddressLine2: (form.shippingSameAsBilling ? form.billingAddressLine2 : form.shippingAddressLine2) || undefined,
+      shippingCity: (form.shippingSameAsBilling ? form.billingCity : form.shippingCity) || undefined,
+      shippingState: (form.shippingSameAsBilling ? form.billingState : form.shippingState) || undefined,
+      shippingZipCode: (form.shippingSameAsBilling ? form.billingZipCode : form.shippingZipCode) || undefined,
       shippingSameAsBilling: form.shippingSameAsBilling,
       attributes: form.attributes,
       phones: form.phones
@@ -711,19 +743,96 @@ export function ContactDetailPage() {
                 ) : null}
               </div>
             </label>
+            <p className="text-sm font-semibold md:col-span-2">Billing Address</p>
             <label className="md:col-span-2">
-              <span className="mb-1 block text-sm text-muted">Billing Address</span>
-              <textarea
-                className="input min-h-24"
-                value={form.billingAddress}
+              <span className="mb-1 block text-sm text-muted">Address Line 1</span>
+              <input
+                className="input"
+                value={form.billingAddressLine1}
                 onChange={(event) => {
-                  const billingAddress = event.target.value;
+                  const next = event.target.value;
                   setForm((prev) =>
                     prev
                       ? {
                           ...prev,
-                          billingAddress,
-                          shippingAddress: prev.shippingSameAsBilling ? billingAddress : prev.shippingAddress
+                          billingAddressLine1: next,
+                          shippingAddressLine1: prev.shippingSameAsBilling ? next : prev.shippingAddressLine1
+                        }
+                      : prev
+                  );
+                }}
+              />
+            </label>
+            <label className="md:col-span-2">
+              <span className="mb-1 block text-sm text-muted">Address Line 2</span>
+              <input
+                className="input"
+                value={form.billingAddressLine2}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          billingAddressLine2: next,
+                          shippingAddressLine2: prev.shippingSameAsBilling ? next : prev.shippingAddressLine2
+                        }
+                      : prev
+                  );
+                }}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">City</span>
+              <input
+                className="input"
+                value={form.billingCity}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          billingCity: next,
+                          shippingCity: prev.shippingSameAsBilling ? next : prev.shippingCity
+                        }
+                      : prev
+                  );
+                }}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">State</span>
+              <input
+                className="input"
+                value={form.billingState}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          billingState: next,
+                          shippingState: prev.shippingSameAsBilling ? next : prev.shippingState
+                        }
+                      : prev
+                  );
+                }}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Zip Code</span>
+              <input
+                className="input"
+                value={form.billingZipCode}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          billingZipCode: next,
+                          shippingZipCode: prev.shippingSameAsBilling ? next : prev.shippingZipCode
                         }
                       : prev
                   );
@@ -741,7 +850,11 @@ export function ContactDetailPage() {
                       ? {
                           ...prev,
                           shippingSameAsBilling: checked,
-                          shippingAddress: checked ? prev.billingAddress : prev.shippingAddress
+                          shippingAddressLine1: checked ? prev.billingAddressLine1 : prev.shippingAddressLine1,
+                          shippingAddressLine2: checked ? prev.billingAddressLine2 : prev.shippingAddressLine2,
+                          shippingCity: checked ? prev.billingCity : prev.shippingCity,
+                          shippingState: checked ? prev.billingState : prev.shippingState,
+                          shippingZipCode: checked ? prev.billingZipCode : prev.shippingZipCode
                         }
                       : prev
                   );
@@ -749,21 +862,49 @@ export function ContactDetailPage() {
               />
               <span>Shipping address is the same as billing</span>
             </label>
+            <p className="text-sm font-semibold md:col-span-2">Shipping Address</p>
             <label className="md:col-span-2">
-              <span className="mb-1 block text-sm text-muted">Shipping Address</span>
-              <textarea
-                className="input min-h-24"
-                value={form.shippingSameAsBilling ? form.billingAddress : form.shippingAddress}
-                onChange={(event) =>
-                  setForm((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          shippingAddress: event.target.value
-                        }
-                      : prev
-                  )
-                }
+              <span className="mb-1 block text-sm text-muted">Address Line 1</span>
+              <input
+                className="input"
+                value={form.shippingSameAsBilling ? form.billingAddressLine1 : form.shippingAddressLine1}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, shippingAddressLine1: event.target.value } : prev))}
+                disabled={form.shippingSameAsBilling}
+              />
+            </label>
+            <label className="md:col-span-2">
+              <span className="mb-1 block text-sm text-muted">Address Line 2</span>
+              <input
+                className="input"
+                value={form.shippingSameAsBilling ? form.billingAddressLine2 : form.shippingAddressLine2}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, shippingAddressLine2: event.target.value } : prev))}
+                disabled={form.shippingSameAsBilling}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">City</span>
+              <input
+                className="input"
+                value={form.shippingSameAsBilling ? form.billingCity : form.shippingCity}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, shippingCity: event.target.value } : prev))}
+                disabled={form.shippingSameAsBilling}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">State</span>
+              <input
+                className="input"
+                value={form.shippingSameAsBilling ? form.billingState : form.shippingState}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, shippingState: event.target.value } : prev))}
+                disabled={form.shippingSameAsBilling}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-muted">Zip Code</span>
+              <input
+                className="input"
+                value={form.shippingSameAsBilling ? form.billingZipCode : form.shippingZipCode}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, shippingZipCode: event.target.value } : prev))}
                 disabled={form.shippingSameAsBilling}
               />
             </label>
@@ -874,12 +1015,33 @@ export function ContactDetailPage() {
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <div className="rounded border border-border bg-canvas p-3">
             <p className="text-sm text-muted">Billing Address</p>
-            <p className="mt-2 whitespace-pre-wrap">{detail.billingAddress || "-"}</p>
+            <p className="mt-2 whitespace-pre-wrap">
+              {[
+                detail.billingAddressLine1,
+                detail.billingAddressLine2,
+                [detail.billingCity, detail.billingState, detail.billingZipCode].filter(Boolean).join(", ")
+              ]
+                .filter((line) => Boolean(line && line.trim()))
+                .join("\n") || "-"}
+            </p>
           </div>
           <div className="rounded border border-border bg-canvas p-3">
             <p className="text-sm text-muted">Shipping Address</p>
             <p className="mt-2 whitespace-pre-wrap">
-              {detail.shippingSameAsBilling ? detail.billingAddress || "-" : detail.shippingAddress || "-"}
+              {(detail.shippingSameAsBilling
+                ? [
+                    detail.billingAddressLine1,
+                    detail.billingAddressLine2,
+                    [detail.billingCity, detail.billingState, detail.billingZipCode].filter(Boolean).join(", ")
+                  ]
+                : [
+                    detail.shippingAddressLine1,
+                    detail.shippingAddressLine2,
+                    [detail.shippingCity, detail.shippingState, detail.shippingZipCode].filter(Boolean).join(", ")
+                  ]
+              )
+                .filter((line) => Boolean(line && line.trim()))
+                .join("\n") || "-"}
             </p>
           </div>
         </div>

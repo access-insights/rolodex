@@ -65,8 +65,16 @@ type DbContact = {
   linkedin_company: string | null;
   linkedin_job_title: string | null;
   linkedin_location: string | null;
-  billing_address: string | null;
-  shipping_address: string | null;
+  billing_address_line1: string | null;
+  billing_address_line2: string | null;
+  billing_city: string | null;
+  billing_state: string | null;
+  billing_zip_code: string | null;
+  shipping_address_line1: string | null;
+  shipping_address_line2: string | null;
+  shipping_city: string | null;
+  shipping_state: string | null;
+  shipping_zip_code: string | null;
   shipping_same_as_billing: boolean | null;
   attributes: ContactAttribute[];
   record_entered_by: string | null;
@@ -114,8 +122,16 @@ type ContactUpsertInput = {
   referredBy?: string;
   referredByContactId?: string;
   linkedInProfileUrl?: string;
-  billingAddress?: string;
-  shippingAddress?: string;
+  billingAddressLine1?: string;
+  billingAddressLine2?: string;
+  billingCity?: string;
+  billingState?: string;
+  billingZipCode?: string;
+  shippingAddressLine1?: string;
+  shippingAddressLine2?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingZipCode?: string;
   shippingSameAsBilling?: boolean;
   attributes?: ContactAttribute[];
   phones?: ContactMethodInput[];
@@ -332,8 +348,16 @@ const contactUpsertSchema = z.object({
   contactType: z.enum(["Advisor", "Funder", "Partner", "Client", "General"]),
   status: z.enum(["Active", "Prospect", "Inactive", "Archived"]),
   linkedInProfileUrl: z.string().trim().url().optional(),
-  billingAddress: z.string().trim().max(2000).optional(),
-  shippingAddress: z.string().trim().max(2000).optional(),
+  billingAddressLine1: z.string().trim().max(240).optional(),
+  billingAddressLine2: z.string().trim().max(240).optional(),
+  billingCity: z.string().trim().max(120).optional(),
+  billingState: z.string().trim().max(120).optional(),
+  billingZipCode: z.string().trim().max(40).optional(),
+  shippingAddressLine1: z.string().trim().max(240).optional(),
+  shippingAddressLine2: z.string().trim().max(240).optional(),
+  shippingCity: z.string().trim().max(120).optional(),
+  shippingState: z.string().trim().max(120).optional(),
+  shippingZipCode: z.string().trim().max(40).optional(),
   shippingSameAsBilling: z.boolean().optional(),
   attributes: z.preprocess(normalizeContactAttributes, z.array(contactAttributeSchema).max(20).optional()),
   phones: z.array(methodEntrySchema).max(25).optional(),
@@ -374,8 +398,16 @@ const mapContactSummary = (contact: DbContact) => ({
   linkedInCompany: contact.linkedin_company,
   linkedInJobTitle: contact.linkedin_job_title,
   linkedInLocation: contact.linkedin_location,
-  billingAddress: contact.billing_address,
-  shippingAddress: contact.shipping_address,
+  billingAddressLine1: contact.billing_address_line1,
+  billingAddressLine2: contact.billing_address_line2,
+  billingCity: contact.billing_city,
+  billingState: contact.billing_state,
+  billingZipCode: contact.billing_zip_code,
+  shippingAddressLine1: contact.shipping_address_line1,
+  shippingAddressLine2: contact.shipping_address_line2,
+  shippingCity: contact.shipping_city,
+  shippingState: contact.shipping_state,
+  shippingZipCode: contact.shipping_zip_code,
   shippingSameAsBilling: Boolean(contact.shipping_same_as_billing),
   attributes: normalizeContactAttributes(contact.attributes) ?? [],
   recordEnteredBy: contact.record_entered_by || "Unknown user",
@@ -522,8 +554,16 @@ const loadContactSummary = async (client: PoolClient, orgId: string, id: string)
       c.linkedin_company,
       c.linkedin_job_title,
       c.linkedin_location,
-      c.billing_address,
-      c.shipping_address,
+      c.billing_address_line1,
+      c.billing_address_line2,
+      c.billing_city,
+      c.billing_state,
+      c.billing_zip_code,
+      c.shipping_address_line1,
+      c.shipping_address_line2,
+      c.shipping_city,
+      c.shipping_state,
+      c.shipping_zip_code,
       c.shipping_same_as_billing,
       c.attributes,
       coalesce(creator.display_name, creator.email, updater.display_name, updater.email, 'Unknown user') as record_entered_by,
@@ -861,8 +901,16 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             c.linkedin_company,
             c.linkedin_job_title,
             c.linkedin_location,
-            c.billing_address,
-            c.shipping_address,
+            c.billing_address_line1,
+            c.billing_address_line2,
+            c.billing_city,
+            c.billing_state,
+            c.billing_zip_code,
+            c.shipping_address_line1,
+            c.shipping_address_line2,
+            c.shipping_city,
+            c.shipping_state,
+            c.shipping_zip_code,
             c.shipping_same_as_billing,
             c.attributes,
             coalesce(creator.display_name, creator.email, updater.display_name, updater.email, 'Unknown user') as record_entered_by,
@@ -978,8 +1026,16 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             contact_type,
             status,
             linkedin_profile_url,
-            billing_address,
-            shipping_address,
+            billing_address_line1,
+            billing_address_line2,
+            billing_city,
+            billing_state,
+            billing_zip_code,
+            shipping_address_line1,
+            shipping_address_line2,
+            shipping_city,
+            shipping_state,
+            shipping_zip_code,
             shipping_same_as_billing,
             attributes,
             created_by,
@@ -1000,9 +1056,17 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             $12,
             $13,
             $14,
-            $15::contact_attribute_enum[],
+            $15,
             $16,
-            $16
+            $17,
+            $18,
+            $19,
+            $20,
+            $21,
+            $22,
+            $23::contact_attribute_enum[],
+            $24,
+            $24
           )
           returning unique_id
           `,
@@ -1018,8 +1082,16 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             payload.contactType,
             payload.status,
             payload.linkedInProfileUrl ?? null,
-            payload.billingAddress ?? null,
-            payload.shippingAddress ?? null,
+            payload.billingAddressLine1 ?? null,
+            payload.billingAddressLine2 ?? null,
+            payload.billingCity ?? null,
+            payload.billingState ?? null,
+            payload.billingZipCode ?? null,
+            payload.shippingAddressLine1 ?? null,
+            payload.shippingAddressLine2 ?? null,
+            payload.shippingCity ?? null,
+            payload.shippingState ?? null,
+            payload.shippingZipCode ?? null,
             payload.shippingSameAsBilling ?? false,
             payload.attributes ?? [],
             actorUserId
@@ -1061,12 +1133,20 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             contact_type = $8::contact_type_enum,
             status = $9::contact_status_enum,
             linkedin_profile_url = $10,
-            billing_address = $11,
-            shipping_address = $12,
-            shipping_same_as_billing = $13,
-            attributes = $14::contact_attribute_enum[],
-            updated_by = $15
-          where unique_id = $16 and organization_id = $17
+            billing_address_line1 = $11,
+            billing_address_line2 = $12,
+            billing_city = $13,
+            billing_state = $14,
+            billing_zip_code = $15,
+            shipping_address_line1 = $16,
+            shipping_address_line2 = $17,
+            shipping_city = $18,
+            shipping_state = $19,
+            shipping_zip_code = $20,
+            shipping_same_as_billing = $21,
+            attributes = $22::contact_attribute_enum[],
+            updated_by = $23
+          where unique_id = $24 and organization_id = $25
           returning unique_id
           `,
           [
@@ -1080,8 +1160,16 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             payload.contactType,
             payload.status,
             payload.linkedInProfileUrl ?? null,
-            payload.billingAddress ?? null,
-            payload.shippingAddress ?? null,
+            payload.billingAddressLine1 ?? null,
+            payload.billingAddressLine2 ?? null,
+            payload.billingCity ?? null,
+            payload.billingState ?? null,
+            payload.billingZipCode ?? null,
+            payload.shippingAddressLine1 ?? null,
+            payload.shippingAddressLine2 ?? null,
+            payload.shippingCity ?? null,
+            payload.shippingState ?? null,
+            payload.shippingZipCode ?? null,
             payload.shippingSameAsBilling ?? false,
             payload.attributes ?? [],
             actorUserId,

@@ -327,7 +327,7 @@ body {
 }
 
 .contacts-search-input {
-  width: min(100%, 22rem);
+  width: min(100%, 18rem);
 }
 
 .contacts-import-btn {

@@ -20,6 +20,7 @@ MIGRATIONS=(
   "004_contact_extensions.sql"
   "005_contact_attributes_search.sql"
   "006_contact_addresses.sql"
+  "007_contact_address_parts.sql"
 )
 
 for file in "${MIGRATIONS[@]}"; do

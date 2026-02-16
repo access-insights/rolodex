@@ -28,8 +28,16 @@ export function ContactCreatePage() {
   const [duplicateInfo, setDuplicateInfo] = useState<{ id: string; name: string } | null>(null);
   const [referredByInput, setReferredByInput] = useState("");
   const [referredByContactId, setReferredByContactId] = useState("");
-  const [billingAddress, setBillingAddress] = useState("");
-  const [shippingAddress, setShippingAddress] = useState("");
+  const [billingAddressLine1, setBillingAddressLine1] = useState("");
+  const [billingAddressLine2, setBillingAddressLine2] = useState("");
+  const [billingCity, setBillingCity] = useState("");
+  const [billingState, setBillingState] = useState("");
+  const [billingZipCode, setBillingZipCode] = useState("");
+  const [shippingAddressLine1, setShippingAddressLine1] = useState("");
+  const [shippingAddressLine2, setShippingAddressLine2] = useState("");
+  const [shippingCity, setShippingCity] = useState("");
+  const [shippingState, setShippingState] = useState("");
+  const [shippingZipCode, setShippingZipCode] = useState("");
   const [shippingSameAsBilling, setShippingSameAsBilling] = useState(false);
   const [referredByMatches, setReferredByMatches] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const [referredByLoading, setReferredByLoading] = useState(false);
@@ -89,8 +97,16 @@ export function ContactCreatePage() {
       referredBy: referredBy || undefined,
       referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: String(formData.get("linkedInProfileUrl") || "") || undefined,
-      billingAddress: billingAddress.trim() || undefined,
-      shippingAddress: (shippingSameAsBilling ? billingAddress : shippingAddress).trim() || undefined,
+      billingAddressLine1: billingAddressLine1.trim() || undefined,
+      billingAddressLine2: billingAddressLine2.trim() || undefined,
+      billingCity: billingCity.trim() || undefined,
+      billingState: billingState.trim() || undefined,
+      billingZipCode: billingZipCode.trim() || undefined,
+      shippingAddressLine1: (shippingSameAsBilling ? billingAddressLine1 : shippingAddressLine1).trim() || undefined,
+      shippingAddressLine2: (shippingSameAsBilling ? billingAddressLine2 : shippingAddressLine2).trim() || undefined,
+      shippingCity: (shippingSameAsBilling ? billingCity : shippingCity).trim() || undefined,
+      shippingState: (shippingSameAsBilling ? billingState : shippingState).trim() || undefined,
+      shippingZipCode: (shippingSameAsBilling ? billingZipCode : shippingZipCode).trim() || undefined,
       shippingSameAsBilling,
       attributes,
       phones: [],
@@ -269,19 +285,65 @@ export function ContactCreatePage() {
         </label>
 
         <div className="grid gap-3 md:grid-cols-2">
+          <p className="text-sm font-semibold md:col-span-2">Billing Address</p>
           <label className="block md:col-span-2">
-            <span className="mb-1 block text-sm text-muted">Billing Address</span>
-            <textarea
-              className="input min-h-24"
-              value={billingAddress}
+            <span className="mb-1 block text-sm text-muted">Address Line 1</span>
+            <input
+              className="input"
+              value={billingAddressLine1}
               onChange={(event) => {
                 const next = event.target.value;
-                setBillingAddress(next);
-                if (shippingSameAsBilling) {
-                  setShippingAddress(next);
-                }
+                setBillingAddressLine1(next);
+                if (shippingSameAsBilling) setShippingAddressLine1(next);
               }}
-              placeholder="Street, City, State/Province, Postal Code, Country"
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="mb-1 block text-sm text-muted">Address Line 2</span>
+            <input
+              className="input"
+              value={billingAddressLine2}
+              onChange={(event) => {
+                const next = event.target.value;
+                setBillingAddressLine2(next);
+                if (shippingSameAsBilling) setShippingAddressLine2(next);
+              }}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">City</span>
+            <input
+              className="input"
+              value={billingCity}
+              onChange={(event) => {
+                const next = event.target.value;
+                setBillingCity(next);
+                if (shippingSameAsBilling) setShippingCity(next);
+              }}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">State</span>
+            <input
+              className="input"
+              value={billingState}
+              onChange={(event) => {
+                const next = event.target.value;
+                setBillingState(next);
+                if (shippingSameAsBilling) setShippingState(next);
+              }}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">Zip Code</span>
+            <input
+              className="input"
+              value={billingZipCode}
+              onChange={(event) => {
+                const next = event.target.value;
+                setBillingZipCode(next);
+                if (shippingSameAsBilling) setShippingZipCode(next);
+              }}
             />
           </label>
           <label className="inline-flex items-center gap-2 md:col-span-2">
@@ -292,20 +354,60 @@ export function ContactCreatePage() {
                 const checked = event.target.checked;
                 setShippingSameAsBilling(checked);
                 if (checked) {
-                  setShippingAddress(billingAddress);
+                  setShippingAddressLine1(billingAddressLine1);
+                  setShippingAddressLine2(billingAddressLine2);
+                  setShippingCity(billingCity);
+                  setShippingState(billingState);
+                  setShippingZipCode(billingZipCode);
                 }
               }}
             />
             <span>Shipping address is the same as billing</span>
           </label>
+          <p className="text-sm font-semibold md:col-span-2">Shipping Address</p>
           <label className="block md:col-span-2">
-            <span className="mb-1 block text-sm text-muted">Shipping Address</span>
-            <textarea
-              className="input min-h-24"
-              value={shippingSameAsBilling ? billingAddress : shippingAddress}
-              onChange={(event) => setShippingAddress(event.target.value)}
+            <span className="mb-1 block text-sm text-muted">Address Line 1</span>
+            <input
+              className="input"
+              value={shippingSameAsBilling ? billingAddressLine1 : shippingAddressLine1}
+              onChange={(event) => setShippingAddressLine1(event.target.value)}
               disabled={shippingSameAsBilling}
-              placeholder="Street, City, State/Province, Postal Code, Country"
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="mb-1 block text-sm text-muted">Address Line 2</span>
+            <input
+              className="input"
+              value={shippingSameAsBilling ? billingAddressLine2 : shippingAddressLine2}
+              onChange={(event) => setShippingAddressLine2(event.target.value)}
+              disabled={shippingSameAsBilling}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">City</span>
+            <input
+              className="input"
+              value={shippingSameAsBilling ? billingCity : shippingCity}
+              onChange={(event) => setShippingCity(event.target.value)}
+              disabled={shippingSameAsBilling}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">State</span>
+            <input
+              className="input"
+              value={shippingSameAsBilling ? billingState : shippingState}
+              onChange={(event) => setShippingState(event.target.value)}
+              disabled={shippingSameAsBilling}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">Zip Code</span>
+            <input
+              className="input"
+              value={shippingSameAsBilling ? billingZipCode : shippingZipCode}
+              onChange={(event) => setShippingZipCode(event.target.value)}
+              disabled={shippingSameAsBilling}
             />
           </label>
         </div>
