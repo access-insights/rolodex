@@ -45,7 +45,46 @@ const attributeOptions: ContactAttribute[] = [
   "Disability Community"
 ];
 
+const phoneLabelOptions = ["Mobile", "Work", "Home", "Direct", "Assistant", "Other"];
+const emailLabelOptions = ["Work", "Personal", "Billing", "Support", "Other"];
+const websiteLabelOptions = ["Company", "LinkedIn", "Personal", "Portfolio", "Other"];
+
 const emptyMethod = (): ContactMethod => ({ label: "", value: "" });
+
+const formatPhoneNumber = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  return value.trim();
+};
+
+const normalizeAttributes = (value: unknown): ContactAttribute[] => {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is ContactAttribute => typeof item === "string");
+  }
+
+  if (typeof value !== "string") return [];
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    const inner = trimmed.slice(1, -1).trim();
+    if (!inner) return [];
+    return inner
+      .split(",")
+      .map((item) => item.trim().replace(/^"(.*)"$/, "$1").replace(/\\"/g, '"'))
+      .filter((item): item is ContactAttribute => item.length > 0);
+  }
+
+  return trimmed
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item): item is ContactAttribute => item.length > 0);
+};
 
 const toFormState = (detail: ContactDetail): ContactFormState => ({
   firstName: detail.firstName,
@@ -55,10 +94,10 @@ const toFormState = (detail: ContactDetail): ContactFormState => ({
   contactType: detail.contactType,
   status: detail.status,
   internalContact: detail.internalContact ?? "",
-  referredBy: detail.referredBy ?? "",
+  referredBy: detail.referredByContact ? `${detail.referredByContact.firstName} ${detail.referredByContact.lastName}` : detail.referredBy ?? "",
   referredByContactId: detail.referredByContactId ?? "",
   linkedInProfileUrl: detail.linkedInProfileUrl ?? "",
-  attributes: detail.attributes ?? [],
+  attributes: normalizeAttributes(detail.attributes),
   phones: detail.phones.length > 0 ? detail.phones : [emptyMethod()],
   emails: detail.emails.length > 0 ? detail.emails : [emptyMethod()],
   websites: detail.websites.length > 0 ? detail.websites : [emptyMethod()]
@@ -67,17 +106,23 @@ const toFormState = (detail: ContactDetail): ContactFormState => ({
 function MethodsEditor({
   label,
   iconLabel,
+  labelOptions,
+  valueType,
   items,
   disabled,
   onChange,
-  onAdd
+  onAdd,
+  onValueBlur
 }: {
   label: string;
   iconLabel: string;
+  labelOptions: string[];
+  valueType: "tel" | "email" | "url";
   items: ContactMethod[];
   disabled: boolean;
   onChange: (index: number, field: "label" | "value", value: string) => void;
   onAdd: () => void;
+  onValueBlur?: (index: number, value: string) => void;
 }) {
   return (
     <section className="rounded border border-border bg-surface p-4" aria-label={label}>
@@ -95,19 +140,31 @@ function MethodsEditor({
       <div className="space-y-3">
         {items.map((item, index) => (
           <div key={`${label}-${index}`} className="grid gap-2 md:grid-cols-2">
-            <input
+            <select
               aria-label={`${label} label ${index + 1}`}
               className="input"
               value={item.label ?? ""}
               onChange={(event) => onChange(index, "label", event.target.value)}
               disabled={disabled}
-              placeholder="Label"
-            />
+            >
+              <option value="">Select label</option>
+              {labelOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              {item.label && !labelOptions.includes(item.label) ? <option value={item.label}>{item.label}</option> : null}
+            </select>
             <input
               aria-label={`${label} value ${index + 1}`}
               className="input"
+              type={valueType}
+              inputMode={valueType === "tel" ? "tel" : valueType === "email" ? "email" : "url"}
+              pattern={valueType === "email" ? ".+@.+" : undefined}
+              title={valueType === "email" ? "Include an @ in the email address." : undefined}
               value={item.value}
               onChange={(event) => onChange(index, "value", event.target.value)}
+              onBlur={(event) => onValueBlur?.(index, event.target.value)}
               disabled={disabled}
               placeholder="Value"
             />
@@ -159,6 +216,8 @@ export function ContactDetailPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState<LinkedInHistoryEntry[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [referredByMatches, setReferredByMatches] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
+  const [referredByLoading, setReferredByLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Loading contact...");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -186,6 +245,37 @@ export function ContactDetailPage() {
       })
       .catch(() => setStatusMessage("Unable to load contact."));
   }, [id]);
+
+  useEffect(() => {
+    if (!editing) return;
+
+    const term = form?.referredBy.trim() ?? "";
+    if (!term) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setReferredByLoading(true);
+      apiClient
+        .listContacts(term)
+        .then((result) => {
+          if (!result.ok || !result.data) {
+            setReferredByMatches([]);
+            return;
+          }
+
+          setReferredByMatches(
+            result.data
+              .filter((contact) => contact.id !== id)
+              .slice(0, 8)
+              .map((contact) => ({ id: contact.id, firstName: contact.firstName, lastName: contact.lastName }))
+          );
+        })
+        .finally(() => setReferredByLoading(false));
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, [editing, form?.referredBy, id]);
 
   const refresh = async () => {
     if (!id) return;
@@ -216,6 +306,18 @@ export function ContactDetailPage() {
 
   const save = async (closeAfter = false) => {
     if (!id || !form) return;
+
+    if (form.referredBy.trim() && !form.referredByContactId) {
+      setStatusMessage("Select a referred-by contact from suggestions.");
+      return;
+    }
+
+    const invalidEmail = form.emails.find((entry) => entry.value.trim().length > 0 && !entry.value.includes("@"));
+    if (invalidEmail) {
+      setStatusMessage("Email addresses must include @.");
+      return;
+    }
+
     setStatusMessage("Saving contact...");
     const payload = {
       id,
@@ -230,7 +332,9 @@ export function ContactDetailPage() {
       referredByContactId: form.referredByContactId || undefined,
       linkedInProfileUrl: form.linkedInProfileUrl || undefined,
       attributes: form.attributes,
-      phones: form.phones.filter((entry) => entry.value.trim().length > 0),
+      phones: form.phones
+        .map((entry) => ({ ...entry, value: formatPhoneNumber(entry.value) }))
+        .filter((entry) => entry.value.trim().length > 0),
       emails: form.emails.filter((entry) => entry.value.trim().length > 0),
       websites: form.websites.filter((entry) => entry.value.trim().length > 0)
     };
@@ -386,6 +490,9 @@ export function ContactDetailPage() {
         <label>
           <span className="mb-1 block text-sm text-muted">Type</span>
           <select className="input" value={form.contactType} onChange={(event) => setForm({ ...form, contactType: event.target.value as ContactType })} disabled={!editing}>
+            <option value="" disabled>
+              Select type
+            </option>
             {typeOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -396,6 +503,9 @@ export function ContactDetailPage() {
         <label>
           <span className="mb-1 block text-sm text-muted">Status</span>
           <select className="input" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as ContactStatus })} disabled={!editing}>
+            <option value="" disabled>
+              Select status
+            </option>
             {statusOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -409,7 +519,55 @@ export function ContactDetailPage() {
         </label>
         <label>
           <span className="mb-1 block text-sm text-muted">Referred By</span>
-          <input className="input" value={form.referredBy} onChange={(event) => setForm({ ...form, referredBy: event.target.value })} disabled={!editing} />
+          <input
+            className="input"
+            value={form.referredBy}
+            onChange={(event) =>
+              setForm({
+                ...form,
+                referredBy: event.target.value,
+                referredByContactId: ""
+              })
+            }
+            onInput={() => setReferredByMatches([])}
+            disabled={!editing}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={editing && referredByMatches.length > 0}
+            aria-controls="referred-by-suggestions"
+          />
+          {editing ? (
+            <div className="mt-2 rounded border border-border bg-canvas p-2">
+              {referredByLoading ? <p className="text-xs text-muted">Loading suggestions...</p> : null}
+              {!referredByLoading && referredByMatches.length === 0 && form.referredBy.trim() ? (
+                <p className="text-xs text-muted">No matching contacts.</p>
+              ) : null}
+              {!referredByLoading && referredByMatches.length > 0 ? (
+                <ul id="referred-by-suggestions" className="space-y-1" aria-label="Referred by suggestions">
+                  {referredByMatches.map((contact) => (
+                    <li key={contact.id}>
+                      <button
+                        type="button"
+                        className="nav-link w-full text-left"
+                        onClick={() =>
+                          setForm((prev) => {
+                            if (!prev) return prev;
+                            return {
+                              ...prev,
+                              referredBy: `${contact.firstName} ${contact.lastName}`,
+                              referredByContactId: contact.id
+                            };
+                          })
+                        }
+                      >
+                        {contact.lastName}, {contact.firstName}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
         </label>
       </section>
 
@@ -445,14 +603,19 @@ export function ContactDetailPage() {
         <MethodsEditor
           label="Phone Numbers"
           iconLabel="PHONE"
+          labelOptions={phoneLabelOptions}
+          valueType="tel"
           items={form.phones}
           disabled={!editing}
           onChange={(index, field, value) => setMethodField("phones", index, field, value)}
           onAdd={() => addMethod("phones")}
+          onValueBlur={(index, value) => setMethodField("phones", index, "value", formatPhoneNumber(value))}
         />
         <MethodsEditor
           label="Email Addresses"
           iconLabel="EMAIL"
+          labelOptions={emailLabelOptions}
+          valueType="email"
           items={form.emails}
           disabled={!editing}
           onChange={(index, field, value) => setMethodField("emails", index, field, value)}
@@ -461,6 +624,8 @@ export function ContactDetailPage() {
         <MethodsEditor
           label="Websites"
           iconLabel="WEB"
+          labelOptions={websiteLabelOptions}
+          valueType="url"
           items={form.websites}
           disabled={!editing}
           onChange={(index, field, value) => setMethodField("websites", index, field, value)}

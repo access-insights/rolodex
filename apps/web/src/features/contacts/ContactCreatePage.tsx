@@ -26,14 +26,22 @@ export function ContactCreatePage() {
     setStatus("Submitting contact...");
 
     const formData = new FormData(event.currentTarget);
+    const contactType = String(formData.get("contactType") || "");
+    const contactStatus = String(formData.get("status") || "");
+
+    if (!contactType || !contactStatus) {
+      setStatus("Type and Status are required.");
+      return;
+    }
+
     const attributes = attributeOptions.filter((attribute) => formData.get(`attr-${attribute}`) === "on");
     const result = await apiClient.createContact({
       firstName: String(formData.get("firstName") || ""),
       lastName: String(formData.get("lastName") || ""),
       company: String(formData.get("company") || ""),
       role: String(formData.get("role") || ""),
-      contactType: String(formData.get("contactType") || "General") as ContactType,
-      status: String(formData.get("status") || "Prospect") as ContactStatus,
+      contactType: contactType as ContactType,
+      status: contactStatus as ContactStatus,
       linkedInProfileUrl: String(formData.get("linkedInProfileUrl") || "") || undefined,
       attributes,
       phones: [],
@@ -80,7 +88,10 @@ export function ContactCreatePage() {
 
           <label className="block">
             <span className="mb-1 block text-sm text-muted">Type</span>
-            <select name="contactType" className="input" defaultValue="General">
+            <select name="contactType" className="input" defaultValue="" required>
+              <option value="" disabled>
+                Select type
+              </option>
               {typeOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -91,7 +102,10 @@ export function ContactCreatePage() {
 
           <label className="block">
             <span className="mb-1 block text-sm text-muted">Status</span>
-            <select name="status" className="input" defaultValue="Prospect">
+            <select name="status" className="input" defaultValue="" required>
+              <option value="" disabled>
+                Select status
+              </option>
               {statusOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}

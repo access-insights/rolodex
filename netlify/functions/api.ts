@@ -1,4 +1,5 @@
 import type { Handler, HandlerEvent } from "@netlify/functions";
+import { randomUUID } from "node:crypto";
 import { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 import { z } from "zod";
@@ -6,17 +7,22 @@ import { z } from "zod";
 type Role = "admin" | "creator" | "participant";
 type ContactType = "Advisor" | "Funder" | "Partner" | "Client" | "General";
 type ContactStatus = "Active" | "Prospect" | "Inactive" | "Archived";
-type ContactAttribute =
-  | "Academia"
-  | "Accessible Education"
-  | "Startup"
-  | "Not for Profit"
-  | "AgeTech"
-  | "Robotics"
-  | "AI Solutions"
-  | "Consumer Products"
-  | "Disability Services"
-  | "Disability Community";
+const CONTACT_ATTRIBUTE_VALUES = [
+  "Academia",
+  "Accessible Education",
+  "Startup",
+  "Not for Profit",
+  "AgeTech",
+  "Robotics",
+  "AI Solutions",
+  "Consumer Products",
+  "Disability Services",
+  "Disability Community"
+] as const;
+
+type ContactAttribute = (typeof CONTACT_ATTRIBUTE_VALUES)[number];
+const contactAttributeSchema = z.enum(CONTACT_ATTRIBUTE_VALUES);
+const contactAttributeSet = new Set<string>(CONTACT_ATTRIBUTE_VALUES);
 
 type JsonEnvelope<T> = {
   ok: boolean;
@@ -261,6 +267,53 @@ const methodEntrySchema = z.object({
   value: z.string().trim().min(1).max(320)
 });
 
+const parsePgArrayLiteral = (value: string): string[] | null => {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null;
+
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) return [];
+
+  return inner
+    .split(",")
+    .map((item) => item.trim().replace(/^"(.*)"$/, "$1").replace(/\\"/g, '"'))
+    .filter(Boolean);
+};
+
+const normalizeContactAttributes = (value: unknown): ContactAttribute[] | undefined => {
+  if (value === undefined || value === null) return undefined;
+
+  let candidates: string[] = [];
+  if (Array.isArray(value)) {
+    candidates = value.filter((item): item is string => typeof item === "string");
+  } else if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsedJson = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsedJson)) {
+        candidates = parsedJson.filter((item): item is string => typeof item === "string");
+      } else if (typeof parsedJson === "string") {
+        candidates = [parsedJson];
+      }
+    } catch {
+      const parsedPgArray = parsePgArrayLiteral(trimmed);
+      if (parsedPgArray) {
+        candidates = parsedPgArray;
+      } else if (trimmed.includes(",")) {
+        candidates = trimmed.split(",").map((item) => item.trim());
+      } else {
+        candidates = [trimmed];
+      }
+    }
+  } else {
+    return value as ContactAttribute[];
+  }
+
+  return Array.from(new Set(candidates.map((item) => item.trim()).filter((item) => contactAttributeSet.has(item)))) as ContactAttribute[];
+};
+
 const contactUpsertSchema = z.object({
   id: z.string().uuid().optional(),
   firstName: z.string().trim().min(1).max(120),
@@ -273,23 +326,7 @@ const contactUpsertSchema = z.object({
   contactType: z.enum(["Advisor", "Funder", "Partner", "Client", "General"]),
   status: z.enum(["Active", "Prospect", "Inactive", "Archived"]),
   linkedInProfileUrl: z.string().trim().url().optional(),
-  attributes: z
-    .array(
-      z.enum([
-        "Academia",
-        "Accessible Education",
-        "Startup",
-        "Not for Profit",
-        "AgeTech",
-        "Robotics",
-        "AI Solutions",
-        "Consumer Products",
-        "Disability Services",
-        "Disability Community"
-      ])
-    )
-    .max(20)
-    .optional(),
+  attributes: z.preprocess(normalizeContactAttributes, z.array(contactAttributeSchema).max(20).optional()),
   phones: z.array(methodEntrySchema).max(25).optional(),
   emails: z.array(methodEntrySchema).max(25).optional(),
   websites: z.array(methodEntrySchema).max(25).optional()
@@ -333,7 +370,7 @@ const mapContactSummary = (contact: DbContact) => ({
   linkedInCompany: contact.linkedin_company,
   linkedInJobTitle: contact.linkedin_job_title,
   linkedInLocation: contact.linkedin_location,
-  attributes: contact.attributes ?? [],
+  attributes: normalizeContactAttributes(contact.attributes) ?? [],
   createdAt: contact.created_at,
   updatedAt: contact.updated_at
 });
@@ -370,6 +407,17 @@ const withRlsContext = async <T>(ctx: AuthedContext, run: (client: PoolClient) =
   }
 };
 
+const displayNameFromEmail = (email?: string) => {
+  if (!email) return "Unknown user";
+  const local = email.split("@")[0] || email;
+  const normalized = local.replace(/[._-]+/g, " ").trim();
+  if (!normalized) return email;
+  return normalized
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
 const getActorUserId = async (client: PoolClient, ctx: AuthedContext): Promise<string | null> => {
   const actor = await client.query<{ id: string }>(
     `
@@ -381,7 +429,27 @@ const getActorUserId = async (client: PoolClient, ctx: AuthedContext): Promise<s
     [ctx.userId, ctx.orgId]
   );
 
-  return actor.rows[0]?.id ?? null;
+  if (actor.rows[0]?.id) return actor.rows[0].id;
+
+  try {
+    const inserted = await client.query<{ id: string }>(
+      `
+      insert into users (id, organization_id, subject, email, display_name, role)
+      values ($1, $2, $3, $4, $5, $6::user_role_enum)
+      on conflict (subject) do update
+      set
+        organization_id = excluded.organization_id,
+        email = coalesce(excluded.email, users.email),
+        display_name = coalesce(excluded.display_name, users.display_name),
+        role = excluded.role
+      returning id
+      `,
+      [randomUUID(), ctx.orgId, ctx.userId, ctx.email ?? null, ctx.email ? displayNameFromEmail(ctx.email) : null, ctx.role]
+    );
+    return inserted.rows[0]?.id ?? null;
+  } catch {
+    return null;
+  }
 };
 
 const writeAuditLog = async (

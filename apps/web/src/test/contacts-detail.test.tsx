@@ -6,6 +6,8 @@ import { ContactDetailPage } from "../features/contacts/ContactDetailPage";
 const mockGetContact = vi.fn();
 const mockAddComment = vi.fn();
 const mockGetHistory = vi.fn();
+const mockUpdateContact = vi.fn();
+const mockListContacts = vi.fn();
 
 vi.mock("../features/auth/AuthContext", () => ({
   useAuth: () => ({
@@ -19,7 +21,8 @@ vi.mock("../features/auth/AuthContext", () => ({
 vi.mock("../lib/apiClient", () => ({
   apiClient: {
     getContact: (...args: unknown[]) => mockGetContact(...args),
-    updateContact: vi.fn(),
+    updateContact: (...args: unknown[]) => mockUpdateContact(...args),
+    listContacts: (...args: unknown[]) => mockListContacts(...args),
     importLinkedIn: vi.fn(),
     getLinkedInHistory: (...args: unknown[]) => mockGetHistory(...args),
     addComment: (...args: unknown[]) => mockAddComment(...args),
@@ -32,6 +35,7 @@ vi.mock("../lib/apiClient", () => ({
 describe("Contact detail page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListContacts.mockResolvedValue({ ok: true, data: [] });
   });
 
   it("renders contact details from API data", async () => {
@@ -44,7 +48,7 @@ describe("Contact detail page", () => {
         company: "Bright Path Advisors",
         role: "Lead Advisor",
         internalContact: "Alex Admin",
-        referredBy: "Board Introduction",
+        referredBy: "",
         referredByContactId: null,
         contactType: "Advisor",
         status: "Active",
@@ -86,7 +90,7 @@ describe("Contact detail page", () => {
           company: "Bright Path Advisors",
           role: "Lead Advisor",
           internalContact: "Alex Admin",
-          referredBy: "Board Introduction",
+          referredBy: "",
           referredByContactId: null,
           contactType: "Advisor",
           status: "Active",
@@ -112,7 +116,7 @@ describe("Contact detail page", () => {
           company: "Bright Path Advisors",
           role: "Lead Advisor",
           internalContact: "Alex Admin",
-          referredBy: "Board Introduction",
+          referredBy: "",
           referredByContactId: null,
           contactType: "Advisor",
           status: "Active",
@@ -154,6 +158,87 @@ describe("Contact detail page", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Follow up next week")).toBeInTheDocument();
+    });
+  });
+
+  it("normalizes string attributes before saving", async () => {
+    const contactId = "33333333-3333-3333-3333-333333333331";
+
+    mockGetContact.mockResolvedValue({
+      ok: true,
+      data: {
+        id: contactId,
+        firstName: "Jordan",
+        lastName: "Price",
+        company: "Bright Path Advisors",
+        role: "Lead Advisor",
+        internalContact: "Alex Admin",
+        referredBy: "",
+        referredByContactId: null,
+        contactType: "Advisor",
+        status: "Active",
+        linkedInProfileUrl: "",
+        linkedInPictureUrl: null,
+        linkedInCompany: null,
+        linkedInJobTitle: null,
+        linkedInLocation: null,
+        attributes: "{Academia,\"AI Solutions\"}",
+        phones: [],
+        emails: [],
+        websites: [],
+        referrals: [],
+        comments: []
+      }
+    });
+
+    mockUpdateContact.mockResolvedValue({
+      ok: true,
+      data: {
+        id: contactId,
+        firstName: "Jordan",
+        lastName: "Price",
+        company: "Bright Path Advisors",
+        role: "Lead Advisor",
+        internalContact: "Alex Admin",
+        referredBy: "",
+        referredByContactId: null,
+        contactType: "Advisor",
+        status: "Active",
+        linkedInProfileUrl: "",
+        linkedInPictureUrl: null,
+        linkedInCompany: null,
+        linkedInJobTitle: null,
+        linkedInLocation: null,
+        attributes: ["Academia", "AI Solutions"],
+        phones: [],
+        emails: [],
+        websites: [],
+        referrals: [],
+        comments: []
+      }
+    });
+
+    render(
+      <MemoryRouter initialEntries={[`/contacts/${contactId}`]}>
+        <Routes>
+          <Route path="/contacts/:id" element={<ContactDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: /price, jordan/i });
+
+    await user.click(screen.getByRole("button", { name: "Edit contact" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(mockUpdateContact).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: contactId,
+          attributes: ["Academia", "AI Solutions"]
+        })
+      );
     });
   });
 });
