@@ -38,13 +38,6 @@ export type ContactComment = {
   authorDisplayName?: string;
 };
 
-export type LinkedInHistoryEntry = {
-  id: string;
-  snapshot: Record<string, unknown>;
-  capturedAt: string;
-  createdAt: string;
-};
-
 export type ContactListItem = {
   id: string;
   firstName: string;
@@ -164,12 +157,6 @@ export const apiClient = {
     }),
   deleteContact: (id: string) => request<{ deleted: boolean }>("contact.delete", undefined, { id }),
 
-  importLinkedIn: (payload: { contactId?: string; profileUrl: string; firstName?: string; lastName?: string; company?: string; allowDuplicate?: boolean }) =>
-    request<ContactDetail>("contact.importLinkedIn", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }),
-
   importCsv: (csvContent: string) =>
     request<{ insertedCount: number; insertedIds: string[] }>("contact.importCsv", {
       method: "POST",
@@ -193,9 +180,6 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify({ commentId })
     }),
-
-  getLinkedInHistory: (contactId: string) =>
-    request<LinkedInHistoryEntry[]>("contact.getLinkedInHistory", undefined, { contactId }),
 
   exportCsv: () => request<{ message: string; url: string }>("csv/export")
 };

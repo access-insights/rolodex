@@ -9,8 +9,7 @@ import {
   type ContactDetail,
   type ContactMethod,
   type ContactStatus,
-  type ContactType,
-  type LinkedInHistoryEntry
+  type ContactType
 } from "../../lib/apiClient";
 
 type ContactFormState = {
@@ -169,35 +168,6 @@ function MethodsEditor({
   );
 }
 
-function LinkedInHistoryModal({
-  open,
-  entries,
-  loading,
-  onClose
-}: {
-  open: boolean;
-  entries: LinkedInHistoryEntry[];
-  loading: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Modal open={open} onClose={onClose} title="LinkedIn History" labelledById="linkedin-history-title">
-      {loading ? <p aria-live="polite">Loading history...</p> : null}
-      {!loading && entries.length === 0 ? <p>No LinkedIn snapshots yet.</p> : null}
-      <ul className="space-y-3">
-        {entries.map((entry) => (
-          <li key={entry.id} className="rounded border border-border p-3">
-            <p className="text-sm text-muted">Captured {new Date(entry.capturedAt).toLocaleString()}</p>
-            <pre className="mt-2 overflow-auto rounded bg-canvas p-2 text-xs">
-              {JSON.stringify(entry.snapshot, null, 2)}
-            </pre>
-          </li>
-        ))}
-      </ul>
-    </Modal>
-  );
-}
-
 export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -207,9 +177,6 @@ export function ContactDetailPage() {
   const [detail, setDetail] = useState<ContactDetail | null>(null);
   const [form, setForm] = useState<ContactFormState | null>(null);
   const [editing, setEditing] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [history, setHistory] = useState<LinkedInHistoryEntry[]>([]);
   const [newComment, setNewComment] = useState("");
   const [referredByMatches, setReferredByMatches] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const [referredByLoading, setReferredByLoading] = useState(false);
@@ -361,28 +328,6 @@ export function ContactDetailPage() {
     if (closeAfter) {
       navigate("/contacts");
     }
-  };
-
-  const updateLinkedIn = async () => {
-    if (!id || !form?.linkedInProfileUrl) return;
-    setStatusMessage("Updating LinkedIn fields...");
-    const result = await apiClient.importLinkedIn({ contactId: id, profileUrl: form.linkedInProfileUrl });
-    if (!result.ok || !result.data) {
-      setStatusMessage(result.error?.message || "LinkedIn update failed.");
-      return;
-    }
-    setDetail(result.data);
-    setForm(toFormState(result.data));
-    setStatusMessage("LinkedIn fields updated.");
-  };
-
-  const openHistory = async () => {
-    if (!id) return;
-    setHistoryOpen(true);
-    setHistoryLoading(true);
-    const result = await apiClient.getLinkedInHistory(id);
-    setHistory(result.ok && result.data ? result.data : []);
-    setHistoryLoading(false);
   };
 
   const onAddComment = async (event: FormEvent<HTMLFormElement>) => {
@@ -657,49 +602,6 @@ export function ContactDetailPage() {
         />
       </div>
 
-      <section className="rounded border border-border bg-surface p-4" aria-label="LinkedIn Data">
-        <div className="grid gap-3 md:grid-cols-[120px_1fr]">
-          <div>
-            {detail.linkedInPictureUrl ? (
-              <img
-                src={detail.linkedInPictureUrl}
-                alt={`${detail.firstName} ${detail.lastName} LinkedIn profile`}
-                className="h-24 w-24 rounded object-cover"
-              />
-            ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded bg-canvas text-sm text-muted">No image</div>
-            )}
-          </div>
-          <div className="space-y-2">
-            <label>
-              <span className="mb-1 block text-sm text-muted">LinkedIn Profile URL</span>
-              <input
-                className="input"
-                value={form.linkedInProfileUrl}
-                onChange={(event) => setForm({ ...form, linkedInProfileUrl: event.target.value })}
-                disabled={!editing}
-              />
-            </label>
-            <p>Company: {detail.linkedInCompany || "Not set"}</p>
-            <p>Job Title: {detail.linkedInJobTitle || "Not set"}</p>
-            <p>Location: {detail.linkedInLocation || "Not set"}</p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn" onClick={() => void updateLinkedIn()} disabled={!canEdit || !form.linkedInProfileUrl}>
-                Update LinkedIn Fields
-              </button>
-              <button type="button" className="btn" onClick={() => void openHistory()}>
-                View LinkedIn History
-              </button>
-              {form.linkedInProfileUrl ? (
-                <a className="nav-link" href={form.linkedInProfileUrl} target="_blank" rel="noreferrer">
-                  Open LinkedIn Profile
-                </a>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section className="rounded border border-border bg-surface p-4" aria-label="Referrals">
         <h2 className="text-xl font-semibold">Referrals</h2>
         {detail.referrals.length === 0 ? <p className="mt-2 text-muted">No referrals linked to this contact.</p> : null}
@@ -785,13 +687,6 @@ export function ContactDetailPage() {
       <p aria-live="polite" className="text-sm text-muted">
         {statusMessage}
       </p>
-
-      <LinkedInHistoryModal
-        open={historyOpen}
-        entries={history}
-        loading={historyLoading}
-        onClose={() => setHistoryOpen(false)}
-      />
 
       <Modal open={confirmArchive} onClose={() => setConfirmArchive(false)} title="Archive Contact" labelledById="archive-contact-title">
         <p>Archive this contact?</p>

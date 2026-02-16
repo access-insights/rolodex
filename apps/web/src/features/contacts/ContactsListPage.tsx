@@ -1,5 +1,5 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Modal } from "../../components/Modal";
 import { apiClient, type ContactListItem } from "../../lib/apiClient";
 import { useAuth } from "../auth/AuthContext";
@@ -10,9 +10,7 @@ type FilterColumn = "Type" | "Status" | "Company";
 
 export function ContactsListPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const csvInputRef = useRef<HTMLInputElement | null>(null);
-  const importMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [contacts, setContacts] = useState<ContactListItem[]>([]);
   const [search, setSearch] = useState("");
@@ -20,11 +18,7 @@ export function ContactsListPage() {
   const [filterValue, setFilterValue] = useState("All");
   const [includeArchived, setIncludeArchived] = useState(false);
 
-  const [linkedinOpen, setLinkedinOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
-  const [importMenuOpen, setImportMenuOpen] = useState(false);
-  const [linkedInUrl, setLinkedInUrl] = useState("");
-  const [linkedInDuplicate, setLinkedInDuplicate] = useState<{ id: string; name: string } | null>(null);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Loading contacts...");
@@ -49,19 +43,6 @@ export function ContactsListPage() {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [search]);
-
-  useEffect(() => {
-    if (!importMenuOpen) return;
-
-    const onWindowMouseDown = (event: MouseEvent) => {
-      if (!importMenuRef.current?.contains(event.target as Node)) {
-        setImportMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("mousedown", onWindowMouseDown);
-    return () => window.removeEventListener("mousedown", onWindowMouseDown);
-  }, [importMenuOpen]);
 
   const filterValues = useMemo(() => {
     const unique = new Set<string>();
@@ -105,38 +86,6 @@ export function ContactsListPage() {
 
     return groups;
   }, [filteredContacts]);
-
-  const submitLinkedInImport = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setStatusMessage("Importing LinkedIn profile...");
-
-    const result = await apiClient.importLinkedIn({
-      profileUrl: linkedInUrl
-    });
-
-    if (!result.ok || !result.data) {
-      if (result.error?.code === "DUPLICATE_CONTACT") {
-        const existingId = String(result.meta?.existingContactId || "");
-        if (existingId) {
-          setLinkedInDuplicate({
-            id: existingId,
-            name: String(result.meta?.existingContactName || "existing contact")
-          });
-          return;
-        }
-      }
-      setStatusMessage(result.error?.message || "LinkedIn import failed.");
-      return;
-    }
-
-    setLinkedinOpen(false);
-    setImportMenuOpen(false);
-    setLinkedInUrl("");
-    setLinkedInDuplicate(null);
-    setStatusMessage("LinkedIn import complete. Opening new contact...");
-    await loadContacts();
-    navigate(`/contacts/${result.data.id}?edit=1&new=1`);
-  };
 
   const submitCsvImport = async () => {
     const file = csvInputRef.current?.files?.[0];
@@ -182,42 +131,10 @@ export function ContactsListPage() {
         <h1 id="contacts-title" className="text-2xl font-semibold">
           Contacts
         </h1>
-        <div
-          className="relative"
-          ref={importMenuRef}
-          onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-              setImportMenuOpen(false);
-            }
-          }}
-        >
-          <button type="button" className="btn" onClick={() => setImportMenuOpen((open) => !open)} aria-expanded={importMenuOpen} aria-haspopup="menu">
-            Import
+        <div className="relative">
+          <button type="button" className="btn" onClick={() => setCsvOpen(true)}>
+            Import from .csv
           </button>
-          {importMenuOpen ? (
-            <div className="absolute right-0 z-10 mt-2 w-48 rounded border border-border bg-surface p-2 shadow-lg" role="menu">
-              <button
-                type="button"
-                className="nav-link w-full text-left"
-                onClick={() => {
-                  setLinkedinOpen(true);
-                  setImportMenuOpen(false);
-                }}
-              >
-                Import from LinkedIn
-              </button>
-              <button
-                type="button"
-                className="nav-link mt-1 w-full text-left"
-                onClick={() => {
-                  setCsvOpen(true);
-                  setImportMenuOpen(false);
-                }}
-              >
-                Import from CSV
-              </button>
-            </div>
-          ) : null}
         </div>
       </header>
 
@@ -348,65 +265,6 @@ export function ContactsListPage() {
       <p aria-live="polite" className="text-sm text-muted">
         {statusMessage}
       </p>
-
-      <Modal open={linkedinOpen} onClose={() => setLinkedinOpen(false)} title="Import from LinkedIn" labelledById="import-linkedin-title">
-        <form className="space-y-3" onSubmit={(event) => void submitLinkedInImport(event)}>
-          <label className="block">
-            <span className="mb-1 block text-sm text-muted">LinkedIn profile URL</span>
-            <input
-              className="input"
-              type="url"
-              required
-              value={linkedInUrl}
-              onChange={(event) => setLinkedInUrl(event.target.value)}
-              placeholder="https://www.linkedin.com/in/example"
-            />
-          </label>
-          <button type="submit" className="btn">
-            Add New Contact
-          </button>
-        </form>
-      </Modal>
-
-      <Modal open={Boolean(linkedInDuplicate)} onClose={() => setLinkedInDuplicate(null)} title="Possible Duplicate Found" labelledById="linkedin-duplicate-title">
-        <p>
-          A similar contact already exists: <strong>{linkedInDuplicate?.name}</strong>.
-        </p>
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            className="btn"
-            onClick={async () => {
-              const result = await apiClient.importLinkedIn({ profileUrl: linkedInUrl, allowDuplicate: true });
-              if (!result.ok || !result.data) {
-                setStatusMessage(result.error?.message || "LinkedIn import failed.");
-                return;
-              }
-              setLinkedInDuplicate(null);
-              setLinkedinOpen(false);
-              setLinkedInUrl("");
-              setStatusMessage("LinkedIn import complete. Opening new contact...");
-              await loadContacts();
-              navigate(`/contacts/${result.data.id}?edit=1&new=1`);
-            }}
-          >
-            Proceed Anyway
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              if (linkedInDuplicate?.id) {
-                navigate(`/contacts/${linkedInDuplicate.id}`);
-              }
-              setLinkedInDuplicate(null);
-              setLinkedinOpen(false);
-            }}
-          >
-            Edit Existing
-          </button>
-        </div>
-      </Modal>
 
       <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="Import from CSV" labelledById="import-csv-title">
         <div className="space-y-3">

@@ -87,13 +87,6 @@ type DbComment = {
   author_email: string | null;
 };
 
-type DbLinkedInHistory = {
-  id: string;
-  snapshot: Record<string, unknown>;
-  captured_at: string;
-  created_at: string;
-};
-
 type DuplicateContactMatch = {
   unique_id: string;
   first_name: string;
@@ -338,15 +331,6 @@ const contactUpsertSchema = z.object({
   websites: z.array(methodEntrySchema).max(25).optional()
 });
 const createContactSchema = contactUpsertSchema.extend({
-  allowDuplicate: z.boolean().optional()
-});
-
-const linkedInImportSchema = z.object({
-  contactId: z.string().uuid().optional(),
-  profileUrl: z.string().trim().url(),
-  firstName: z.string().trim().min(1).max(120).optional(),
-  lastName: z.string().trim().min(1).max(120).optional(),
-  company: z.string().trim().max(240).optional(),
   allowDuplicate: z.boolean().optional()
 });
 
@@ -672,35 +656,6 @@ const replaceContactMethods = async (
       [ctx.orgId, contactId, website.label ?? null, website.value, actorUserId]
     );
   }
-};
-
-const extractLinkedInSnapshot = (profileUrl: string) => {
-  const parsed = new URL(profileUrl);
-  const slug = parsed.pathname.split("/").filter(Boolean).pop() || "";
-  const cleanSlug = slug
-    .replace(/[0-9]/g, " ")
-    .replace(/[_\-+.]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const parts = cleanSlug
-    .split(" ")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-  const toTitleCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
-  const firstName = parts[0] ? toTitleCase(parts[0]) : "LinkedIn";
-  const lastName = parts[1] ? toTitleCase(parts[1]) : "Contact";
-
-  return {
-    profileUrl,
-    firstName,
-    lastName,
-    company: null as string | null,
-    jobTitle: null as string | null,
-    location: null as string | null,
-    profilePictureUrl: null as string | null,
-    capturedFromHost: parsed.hostname,
-    profileSlug: slug
-  };
 };
 
 const findDuplicateContact = async (
@@ -1144,144 +1099,6 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
         return json(200, { ok: true, data: { deleted: true } });
       }
 
-      case "contact.importLinkedIn": {
-        requireRole(ctx, ["admin", "creator"]);
-        const payload = linkedInImportSchema.parse(parseBody(event));
-        const actorUserId = await getActorUserId(client, ctx);
-        const snapshot = extractLinkedInSnapshot(payload.profileUrl);
-
-        let contactId = payload.contactId;
-        if (!contactId) {
-          const firstName = payload.firstName || snapshot.firstName;
-          const lastName = payload.lastName || snapshot.lastName;
-          const company = payload.company || snapshot.company;
-
-          if (!payload.allowDuplicate) {
-            const duplicate = await findDuplicateContact(client, ctx.orgId, {
-              firstName,
-              lastName,
-              company,
-              linkedInProfileUrl: payload.profileUrl
-            });
-
-            if (duplicate) {
-              return json(409, {
-                ok: false,
-                error: {
-                  code: "DUPLICATE_CONTACT",
-                  message: "Possible duplicate contact found."
-                },
-                meta: {
-                  existingContactId: duplicate.unique_id,
-                  existingContactName: `${duplicate.first_name} ${duplicate.last_name}`
-                }
-              });
-            }
-          }
-
-          const inserted = await client.query<{ unique_id: string }>(
-            `
-            insert into contacts (
-              organization_id,
-              first_name,
-              last_name,
-              organization,
-              role,
-              contact_type,
-              status,
-              linkedin_profile_url,
-              linkedin_picture_url,
-              linkedin_company,
-              linkedin_job_title,
-              linkedin_location,
-              created_by,
-              updated_by
-            )
-            values (
-              $1,
-              $2,
-              $3,
-              $4,
-              $5,
-              'General'::contact_type_enum,
-              'Prospect'::contact_status_enum,
-              $6,
-              $7,
-              $8,
-              $9,
-              $10,
-              $11,
-              $11
-            )
-            returning unique_id
-            `,
-            [
-              ctx.orgId,
-              firstName,
-              lastName,
-              company,
-              null,
-              payload.profileUrl,
-              snapshot.profilePictureUrl,
-              snapshot.company,
-              snapshot.jobTitle,
-              snapshot.location,
-              actorUserId
-            ]
-          );
-          contactId = inserted.rows[0].unique_id;
-        } else {
-          const updated = await client.query<{ unique_id: string }>(
-            `
-            update contacts
-            set
-              linkedin_profile_url = $1,
-              linkedin_picture_url = $2,
-              linkedin_company = $3,
-              linkedin_job_title = $4,
-              linkedin_location = $5,
-              updated_by = $6
-            where unique_id = $7 and organization_id = $8
-            returning unique_id
-            `,
-            [
-              payload.profileUrl,
-              snapshot.profilePictureUrl,
-              snapshot.company,
-              snapshot.jobTitle,
-              snapshot.location,
-              actorUserId,
-              contactId,
-              ctx.orgId
-            ]
-          );
-
-          if (!updated.rows[0]) {
-            return json(404, { ok: false, error: { code: "NOT_FOUND", message: "Contact not found" } });
-          }
-        }
-
-        await client.query(
-          `
-          insert into linkedin_history (organization_id, contact_id, snapshot, captured_at, created_by)
-          values ($1, $2, $3::jsonb, now(), $4)
-          `,
-          [ctx.orgId, contactId, JSON.stringify(snapshot), actorUserId]
-        );
-
-        await writeAuditLog(client, ctx, {
-          action: "contacts.linkedin_import",
-          entityType: "contacts",
-          entityId: contactId,
-          ip: event.headers["x-forwarded-for"] || "local",
-          userAgent: event.headers["user-agent"] || "unknown",
-          metadata: { profileUrl: payload.profileUrl }
-        });
-
-        const detail = await loadContactDetail(client, ctx.orgId, contactId);
-        return json(200, { ok: true, data: detail });
-      }
-
       case "contact.importCsv": {
         requireRole(ctx, ["admin", "creator"]);
         const payload = csvImportSchema.parse(parseBody(event));
@@ -1429,34 +1246,6 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
         });
 
         return json(200, { ok: true, data: { deleted: true, id: payload.commentId } });
-      }
-
-      case "contact.getLinkedInHistory": {
-        requireRole(ctx, ["admin", "creator", "participant"]);
-        const contactId = event.queryStringParameters?.contactId;
-        if (!contactId || !isUuid(contactId)) {
-          return json(400, { ok: false, error: { code: "BAD_REQUEST", message: "Missing or invalid contactId" } });
-        }
-
-        const history = await client.query<DbLinkedInHistory>(
-          `
-          select id, snapshot, captured_at, created_at
-          from linkedin_history
-          where organization_id = $1 and contact_id = $2
-          order by captured_at desc
-          `,
-          [ctx.orgId, contactId]
-        );
-
-        return json(200, {
-          ok: true,
-          data: history.rows.map((item) => ({
-            id: item.id,
-            snapshot: item.snapshot,
-            capturedAt: item.captured_at,
-            createdAt: item.created_at
-          }))
-        });
       }
 
       case "csv/export": {
