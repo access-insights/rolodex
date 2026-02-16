@@ -85,6 +85,8 @@ const normalizeAttributes = (value: unknown): ContactAttribute[] => {
     .filter((item): item is ContactAttribute => item.length > 0);
 };
 
+const normalizePersonName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+
 const toFormState = (detail: ContactDetail): ContactFormState => ({
   firstName: detail.firstName,
   lastName: detail.lastName,
@@ -230,6 +232,32 @@ export function ContactDetailPage() {
   }, [detail]);
   const detailAttributes = useMemo(() => normalizeAttributes(detail?.attributes), [detail?.attributes]);
 
+  const resolveReferredByContact = async (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) return { status: "empty" as const };
+
+    const result = await apiClient.listContacts(trimmed);
+    if (!result.ok || !result.data) {
+      return { status: "error" as const, message: result.error?.message || "Unable to validate referred-by contact." };
+    }
+
+    const normalized = normalizePersonName(trimmed);
+    const exactMatches = result.data.filter((contact) => {
+      if (contact.id === id) return false;
+      const firstLast = normalizePersonName(`${contact.firstName} ${contact.lastName}`);
+      const lastFirst = normalizePersonName(`${contact.lastName}, ${contact.firstName}`);
+      return normalized === firstLast || normalized === lastFirst;
+    });
+
+    if (exactMatches.length === 0) return { status: "none" as const };
+    if (exactMatches.length > 1) return { status: "ambiguous" as const };
+
+    return {
+      status: "matched" as const,
+      contact: exactMatches[0]
+    };
+  };
+
   useEffect(() => {
     if (!id) return;
     apiClient
@@ -320,9 +348,35 @@ export function ContactDetailPage() {
       return;
     }
 
-    if (form.referredBy.trim() && !form.referredByContactId) {
-      setStatusMessage("Select a referred-by contact from suggestions.");
-      return;
+    let resolvedReferredBy = form.referredBy.trim();
+    let resolvedReferredByContactId = form.referredByContactId;
+    if (resolvedReferredBy && !resolvedReferredByContactId) {
+      const resolution = await resolveReferredByContact(resolvedReferredBy);
+      if (resolution.status === "none") {
+        setStatusMessage("Referred By must match an existing contact.");
+        return;
+      }
+      if (resolution.status === "ambiguous") {
+        setStatusMessage("Multiple contacts match Referred By. Please choose one from suggestions.");
+        return;
+      }
+      if (resolution.status === "error") {
+        setStatusMessage(resolution.message);
+        return;
+      }
+      if (resolution.status === "matched") {
+        resolvedReferredBy = `${resolution.contact.firstName} ${resolution.contact.lastName}`;
+        resolvedReferredByContactId = resolution.contact.id;
+        setForm((prev) =>
+          prev
+            ? {
+                ...prev,
+                referredBy: resolvedReferredBy,
+                referredByContactId: resolvedReferredByContactId
+              }
+            : prev
+        );
+      }
     }
 
     const invalidEmail = form.emails.find((entry) => entry.value.trim().length > 0 && !entry.value.includes("@"));
@@ -341,8 +395,8 @@ export function ContactDetailPage() {
       contactType: form.contactType,
       status: form.status,
       internalContact: form.internalContact,
-      referredBy: form.referredBy,
-      referredByContactId: form.referredByContactId || undefined,
+      referredBy: resolvedReferredBy,
+      referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: form.linkedInProfileUrl || undefined,
       attributes: form.attributes,
       phones: form.phones
@@ -409,6 +463,29 @@ export function ContactDetailPage() {
       setStatusMessage("Type is required before archiving.");
       return;
     }
+
+    let resolvedReferredBy = form.referredBy.trim();
+    let resolvedReferredByContactId = form.referredByContactId;
+    if (resolvedReferredBy && !resolvedReferredByContactId) {
+      const resolution = await resolveReferredByContact(resolvedReferredBy);
+      if (resolution.status === "none") {
+        setStatusMessage("Referred By must match an existing contact.");
+        return;
+      }
+      if (resolution.status === "ambiguous") {
+        setStatusMessage("Multiple contacts match Referred By. Please choose one from suggestions.");
+        return;
+      }
+      if (resolution.status === "error") {
+        setStatusMessage(resolution.message);
+        return;
+      }
+      if (resolution.status === "matched") {
+        resolvedReferredBy = `${resolution.contact.firstName} ${resolution.contact.lastName}`;
+        resolvedReferredByContactId = resolution.contact.id;
+      }
+    }
+
     const payload = {
       id,
       firstName: form.firstName,
@@ -418,8 +495,8 @@ export function ContactDetailPage() {
       contactType: form.contactType as ContactType,
       status: "Archived" as const,
       internalContact: form.internalContact,
-      referredBy: form.referredBy,
-      referredByContactId: form.referredByContactId || undefined,
+      referredBy: resolvedReferredBy,
+      referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: form.linkedInProfileUrl || undefined,
       attributes: form.attributes,
       phones: form.phones
@@ -557,6 +634,21 @@ export function ContactDetailPage() {
                   })
                 }
                 onInput={() => setReferredByMatches([])}
+                onBlur={() => {
+                  if (!form.referredBy.trim() || form.referredByContactId) return;
+                  void resolveReferredByContact(form.referredBy).then((resolution) => {
+                    if (resolution.status !== "matched") return;
+                    setForm((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            referredBy: `${resolution.contact.firstName} ${resolution.contact.lastName}`,
+                            referredByContactId: resolution.contact.id
+                          }
+                        : prev
+                    );
+                  });
+                }}
                 role="combobox"
                 aria-autocomplete="list"
                 aria-expanded={referredByMatches.length > 0}

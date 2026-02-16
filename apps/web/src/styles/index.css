@@ -107,7 +107,7 @@ body {
 
 .contact-name {
   margin: 0;
-  font-size: 2.15rem;
+  font-size: 1.7rem;
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-weight: 700;
@@ -120,7 +120,7 @@ body {
 
 .contact-section-title {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.35rem;
   line-height: 1.2;
   letter-spacing: -0.015em;
   font-weight: 650;
@@ -145,7 +145,7 @@ body {
 
 .contact-view-value {
   margin: 0.25rem 0 0;
-  font-size: 2rem;
+  font-size: 1.45rem;
   font-weight: 550;
   line-height: 1.2;
 }
@@ -243,7 +243,7 @@ body {
 
 .app-shell-brand-text {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.65rem;
   letter-spacing: -0.02em;
   font-weight: 650;
 }
@@ -256,7 +256,7 @@ body {
 
 .app-shell-user {
   color: var(--color-text);
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .app-shell-signout {
@@ -284,9 +284,50 @@ body {
   padding: 0.58rem 1.1rem;
   text-decoration: none;
   color: var(--color-text);
-  font-size: 1.35rem;
+  font-size: 1.15rem;
   line-height: 1.15;
   background: transparent;
+}
+
+.contacts-results-layout {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.contacts-alpha-nav {
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface);
+  padding: 0.75rem 0.5rem;
+  height: fit-content;
+}
+
+.contacts-alpha-title {
+  margin: 0 0 0.4rem;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.contacts-alpha-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  justify-content: center;
+}
+
+.login-page {
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+
+.login-panel {
+  border: 1px solid color-mix(in oklab, var(--color-border), #fff 22%);
+  border-radius: 1rem;
+  background: color-mix(in oklab, var(--color-surface), #f5f6f5 22%);
+  padding: 1.5rem 1.2rem;
 }
 
 .app-shell-tab:hover {
@@ -301,12 +342,12 @@ body {
 
 @media (max-width: 980px) {
   .contact-name {
-    font-size: 1.8rem;
+    font-size: 1.45rem;
   }
 
   .contact-section-title,
   .contact-view-value {
-    font-size: 1.35rem;
+    font-size: 1.2rem;
   }
 
   .contact-view-grid {
@@ -314,7 +355,7 @@ body {
   }
 
   .app-shell-brand-text {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
   }
 
   .app-shell-user {
@@ -326,8 +367,33 @@ body {
   }
 
   .app-shell-tab {
-    font-size: 1.05rem;
+    font-size: 0.95rem;
     padding: 0.5rem 0.8rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .contacts-results-layout {
+    grid-template-columns: minmax(0, 1fr) 4.5rem;
+    align-items: start;
+  }
+
+  .contacts-alpha-nav {
+    position: sticky;
+    top: 1rem;
+    padding: 0.6rem 0.4rem;
+  }
+
+  .contacts-alpha-list {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .contacts-alpha-list .nav-link {
+    width: 2rem;
+    text-align: center;
+    padding: 0.28rem 0;
   }
 }
 

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiClient, type ContactAttribute, type ContactStatus, type ContactType, type ContactUpsertInput } from "../../lib/apiClient";
 
@@ -17,6 +17,8 @@ const attributeOptions: ContactAttribute[] = [
   "Disability Community"
 ];
 
+const normalizePersonName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+
 export function ContactCreatePage() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<string>("Idle");
@@ -24,8 +26,55 @@ export function ContactCreatePage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [pendingPayload, setPendingPayload] = useState<ContactUpsertInput | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<{ id: string; name: string } | null>(null);
+  const [referredByInput, setReferredByInput] = useState("");
+  const [referredByContactId, setReferredByContactId] = useState("");
+  const [referredByMatches, setReferredByMatches] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
+  const [referredByLoading, setReferredByLoading] = useState(false);
 
-  const buildPayload = (formData: FormData): ContactUpsertInput => {
+  useEffect(() => {
+    const term = referredByInput.trim();
+    if (!term) return;
+
+    const timer = window.setTimeout(() => {
+      setReferredByLoading(true);
+      apiClient
+        .listContacts(term)
+        .then((result) => {
+          if (!result.ok || !result.data) {
+            setReferredByMatches([]);
+            return;
+          }
+          setReferredByMatches(result.data.slice(0, 8).map((contact) => ({ id: contact.id, firstName: contact.firstName, lastName: contact.lastName })));
+        })
+        .finally(() => setReferredByLoading(false));
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, [referredByInput]);
+
+  const resolveReferredByContact = async (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) return { status: "empty" as const };
+
+    const result = await apiClient.listContacts(trimmed);
+    if (!result.ok || !result.data) {
+      return { status: "error" as const, message: result.error?.message || "Unable to validate referred-by contact." };
+    }
+
+    const normalized = normalizePersonName(trimmed);
+    const exactMatches = result.data.filter((contact) => {
+      const firstLast = normalizePersonName(`${contact.firstName} ${contact.lastName}`);
+      const lastFirst = normalizePersonName(`${contact.lastName}, ${contact.firstName}`);
+      return normalized === firstLast || normalized === lastFirst;
+    });
+
+    if (exactMatches.length === 0) return { status: "none" as const };
+    if (exactMatches.length > 1) return { status: "ambiguous" as const };
+
+    return { status: "matched" as const, contact: exactMatches[0] };
+  };
+
+  const buildPayload = (formData: FormData, referredBy: string, resolvedReferredByContactId: string): ContactUpsertInput => {
     const attributes = attributeOptions.filter((attribute) => formData.get(`attr-${attribute}`) === "on");
     return {
       firstName: String(formData.get("firstName") || ""),
@@ -34,6 +83,8 @@ export function ContactCreatePage() {
       role: String(formData.get("role") || ""),
       contactType: selectedType as ContactType,
       status: selectedStatus as ContactStatus,
+      referredBy: referredBy || undefined,
+      referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: String(formData.get("linkedInProfileUrl") || "") || undefined,
       attributes,
       phones: [],
@@ -52,7 +103,31 @@ export function ContactCreatePage() {
       return;
     }
 
-    const payload = buildPayload(formData);
+    let resolvedReferredBy = referredByInput.trim();
+    let resolvedReferredByContactId = referredByContactId;
+    if (resolvedReferredBy && !resolvedReferredByContactId) {
+      const resolution = await resolveReferredByContact(resolvedReferredBy);
+      if (resolution.status === "none") {
+        setStatus("Referred By must match an existing contact.");
+        return;
+      }
+      if (resolution.status === "ambiguous") {
+        setStatus("Multiple contacts match Referred By. Please choose one from suggestions.");
+        return;
+      }
+      if (resolution.status === "error") {
+        setStatus(resolution.message);
+        return;
+      }
+      if (resolution.status === "matched") {
+        resolvedReferredBy = `${resolution.contact.firstName} ${resolution.contact.lastName}`;
+        resolvedReferredByContactId = resolution.contact.id;
+        setReferredByInput(resolvedReferredBy);
+        setReferredByContactId(resolvedReferredByContactId);
+      }
+    }
+
+    const payload = buildPayload(formData, resolvedReferredBy, resolvedReferredByContactId);
     const result = await apiClient.createContact(payload);
 
     if (!result.ok || !result.data) {
@@ -130,6 +205,55 @@ export function ContactCreatePage() {
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="block md:col-span-2">
+            <span className="mb-1 block text-sm text-muted">Referred By</span>
+            <input
+              className="input"
+              value={referredByInput}
+              onChange={(event) => {
+                setReferredByInput(event.target.value);
+                setReferredByContactId("");
+                setReferredByMatches([]);
+              }}
+              onBlur={() => {
+                if (!referredByInput.trim() || referredByContactId) return;
+                void resolveReferredByContact(referredByInput).then((resolution) => {
+                  if (resolution.status !== "matched") return;
+                  setReferredByInput(`${resolution.contact.firstName} ${resolution.contact.lastName}`);
+                  setReferredByContactId(resolution.contact.id);
+                });
+              }}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={referredByMatches.length > 0}
+              aria-controls="create-referred-by-suggestions"
+            />
+            <div className="mt-2 rounded border border-border bg-canvas p-2">
+              {referredByLoading ? <p className="text-xs text-muted">Loading suggestions...</p> : null}
+              {!referredByLoading && referredByMatches.length === 0 && referredByInput.trim() ? (
+                <p className="text-xs text-muted">No matching contacts.</p>
+              ) : null}
+              {!referredByLoading && referredByMatches.length > 0 ? (
+                <ul id="create-referred-by-suggestions" className="space-y-1" aria-label="Referred by suggestions">
+                  {referredByMatches.map((contact) => (
+                    <li key={contact.id}>
+                      <button
+                        type="button"
+                        className="nav-link w-full text-left"
+                        onClick={() => {
+                          setReferredByInput(`${contact.firstName} ${contact.lastName}`);
+                          setReferredByContactId(contact.id);
+                        }}
+                      >
+                        {contact.lastName}, {contact.firstName}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           </label>
         </div>
 

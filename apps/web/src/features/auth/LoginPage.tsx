@@ -19,11 +19,8 @@ export function LoginPage() {
   }, [navigate, state, user]);
 
   return (
-    <section
-      aria-labelledby="login-title"
-      className="flex min-h-screen items-center justify-center bg-white px-4 text-black"
-    >
-      <div className="w-full max-w-sm text-center">
+    <section aria-labelledby="login-title" className="login-page flex min-h-screen items-center justify-center px-4">
+      <div className="login-panel w-full max-w-sm text-center">
         <p className="text-sm uppercase tracking-[0.2em] text-muted">Access Insights</p>
         <h1 id="login-title" className="text-4xl font-semibold tracking-tight">
           Rolodex
