@@ -164,16 +164,18 @@ export function ContactsListPage() {
           >
             <label className="block">
               <span className="mb-1 block text-sm text-muted">Search</span>
-              <input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                className="input"
-                placeholder="Search"
-              />
+              <div className="contacts-search-row">
+                <input
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  className="input contacts-search-input"
+                  placeholder="Search"
+                />
+                <button type="submit" className="btn">
+                  Search
+                </button>
+              </div>
             </label>
-            <button type="submit" className="btn">
-              Search
-            </button>
           </form>
 
           <div className="grid gap-2 md:grid-cols-2">

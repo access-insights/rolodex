@@ -28,6 +28,9 @@ export function ContactCreatePage() {
   const [duplicateInfo, setDuplicateInfo] = useState<{ id: string; name: string } | null>(null);
   const [referredByInput, setReferredByInput] = useState("");
   const [referredByContactId, setReferredByContactId] = useState("");
+  const [billingAddress, setBillingAddress] = useState("");
+  const [shippingAddress, setShippingAddress] = useState("");
+  const [shippingSameAsBilling, setShippingSameAsBilling] = useState(false);
   const [referredByMatches, setReferredByMatches] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const [referredByLoading, setReferredByLoading] = useState(false);
 
@@ -86,6 +89,9 @@ export function ContactCreatePage() {
       referredBy: referredBy || undefined,
       referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: String(formData.get("linkedInProfileUrl") || "") || undefined,
+      billingAddress: billingAddress.trim() || undefined,
+      shippingAddress: (shippingSameAsBilling ? billingAddress : shippingAddress).trim() || undefined,
+      shippingSameAsBilling,
       attributes,
       phones: [],
       emails: [],
@@ -261,6 +267,48 @@ export function ContactCreatePage() {
           <span className="mb-1 block text-sm text-muted">LinkedIn Profile URL</span>
           <input name="linkedInProfileUrl" className="input" type="url" placeholder="https://www.linkedin.com/in/example" />
         </label>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="block md:col-span-2">
+            <span className="mb-1 block text-sm text-muted">Billing Address</span>
+            <textarea
+              className="input min-h-24"
+              value={billingAddress}
+              onChange={(event) => {
+                const next = event.target.value;
+                setBillingAddress(next);
+                if (shippingSameAsBilling) {
+                  setShippingAddress(next);
+                }
+              }}
+              placeholder="Street, City, State/Province, Postal Code, Country"
+            />
+          </label>
+          <label className="inline-flex items-center gap-2 md:col-span-2">
+            <input
+              type="checkbox"
+              checked={shippingSameAsBilling}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setShippingSameAsBilling(checked);
+                if (checked) {
+                  setShippingAddress(billingAddress);
+                }
+              }}
+            />
+            <span>Shipping address is the same as billing</span>
+          </label>
+          <label className="block md:col-span-2">
+            <span className="mb-1 block text-sm text-muted">Shipping Address</span>
+            <textarea
+              className="input min-h-24"
+              value={shippingSameAsBilling ? billingAddress : shippingAddress}
+              onChange={(event) => setShippingAddress(event.target.value)}
+              disabled={shippingSameAsBilling}
+              placeholder="Street, City, State/Province, Postal Code, Country"
+            />
+          </label>
+        </div>
 
         <fieldset className="rounded border border-border p-3">
           <legend className="px-1 text-sm font-semibold">Attributes</legend>

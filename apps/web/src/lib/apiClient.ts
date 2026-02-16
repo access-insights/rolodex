@@ -55,6 +55,9 @@ export type ContactListItem = {
   linkedInCompany?: string | null;
   linkedInJobTitle?: string | null;
   linkedInLocation?: string | null;
+  billingAddress?: string | null;
+  shippingAddress?: string | null;
+  shippingSameAsBilling?: boolean;
   attributes: ContactAttribute[];
   recordEnteredBy?: string | null;
   createdAt?: string;
@@ -105,6 +108,9 @@ export type ContactUpsertInput = {
   referredBy?: string;
   referredByContactId?: string;
   linkedInProfileUrl?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  shippingSameAsBilling?: boolean;
   allowDuplicate?: boolean;
   attributes?: ContactAttribute[];
   phones?: ContactMethod[];

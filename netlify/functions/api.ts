@@ -65,9 +65,11 @@ type DbContact = {
   linkedin_company: string | null;
   linkedin_job_title: string | null;
   linkedin_location: string | null;
+  billing_address: string | null;
+  shipping_address: string | null;
+  shipping_same_as_billing: boolean | null;
   attributes: ContactAttribute[];
-  creator_name: string | null;
-  creator_email: string | null;
+  record_entered_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -112,6 +114,9 @@ type ContactUpsertInput = {
   referredBy?: string;
   referredByContactId?: string;
   linkedInProfileUrl?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  shippingSameAsBilling?: boolean;
   attributes?: ContactAttribute[];
   phones?: ContactMethodInput[];
   emails?: ContactMethodInput[];
@@ -327,6 +332,9 @@ const contactUpsertSchema = z.object({
   contactType: z.enum(["Advisor", "Funder", "Partner", "Client", "General"]),
   status: z.enum(["Active", "Prospect", "Inactive", "Archived"]),
   linkedInProfileUrl: z.string().trim().url().optional(),
+  billingAddress: z.string().trim().max(2000).optional(),
+  shippingAddress: z.string().trim().max(2000).optional(),
+  shippingSameAsBilling: z.boolean().optional(),
   attributes: z.preprocess(normalizeContactAttributes, z.array(contactAttributeSchema).max(20).optional()),
   phones: z.array(methodEntrySchema).max(25).optional(),
   emails: z.array(methodEntrySchema).max(25).optional(),
@@ -366,8 +374,11 @@ const mapContactSummary = (contact: DbContact) => ({
   linkedInCompany: contact.linkedin_company,
   linkedInJobTitle: contact.linkedin_job_title,
   linkedInLocation: contact.linkedin_location,
+  billingAddress: contact.billing_address,
+  shippingAddress: contact.shipping_address,
+  shippingSameAsBilling: Boolean(contact.shipping_same_as_billing),
   attributes: normalizeContactAttributes(contact.attributes) ?? [],
-  recordEnteredBy: contact.creator_name || contact.creator_email || "Unknown user",
+  recordEnteredBy: contact.record_entered_by || "Unknown user",
   createdAt: contact.created_at,
   updatedAt: contact.updated_at
 });
@@ -511,13 +522,16 @@ const loadContactSummary = async (client: PoolClient, orgId: string, id: string)
       c.linkedin_company,
       c.linkedin_job_title,
       c.linkedin_location,
+      c.billing_address,
+      c.shipping_address,
+      c.shipping_same_as_billing,
       c.attributes,
-      u.display_name as creator_name,
-      u.email as creator_email,
+      coalesce(creator.display_name, creator.email, updater.display_name, updater.email, 'Unknown user') as record_entered_by,
       c.created_at,
       c.updated_at
     from contacts c
-    left join users u on u.id = c.created_by and u.organization_id = c.organization_id
+    left join users creator on creator.id = c.created_by and creator.organization_id = c.organization_id
+    left join users updater on updater.id = c.updated_by and updater.organization_id = c.organization_id
     where c.unique_id = $1 and c.organization_id = $2
     limit 1
     `,
@@ -847,13 +861,16 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             c.linkedin_company,
             c.linkedin_job_title,
             c.linkedin_location,
+            c.billing_address,
+            c.shipping_address,
+            c.shipping_same_as_billing,
             c.attributes,
-            u.display_name as creator_name,
-            u.email as creator_email,
+            coalesce(creator.display_name, creator.email, updater.display_name, updater.email, 'Unknown user') as record_entered_by,
             c.created_at,
             c.updated_at
           from contacts c
-          left join users u on u.id = c.created_by and u.organization_id = c.organization_id
+          left join users creator on creator.id = c.created_by and creator.organization_id = c.organization_id
+          left join users updater on updater.id = c.updated_by and updater.organization_id = c.organization_id
           where c.organization_id = $1
             and (
               $2 = ''
@@ -961,6 +978,9 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             contact_type,
             status,
             linkedin_profile_url,
+            billing_address,
+            shipping_address,
+            shipping_same_as_billing,
             attributes,
             created_by,
             updated_by
@@ -977,9 +997,12 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             $9::contact_type_enum,
             $10::contact_status_enum,
             $11,
-            $12::contact_attribute_enum[],
+            $12,
             $13,
-            $13
+            $14,
+            $15::contact_attribute_enum[],
+            $16,
+            $16
           )
           returning unique_id
           `,
@@ -995,6 +1018,9 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             payload.contactType,
             payload.status,
             payload.linkedInProfileUrl ?? null,
+            payload.billingAddress ?? null,
+            payload.shippingAddress ?? null,
+            payload.shippingSameAsBilling ?? false,
             payload.attributes ?? [],
             actorUserId
           ]
@@ -1035,9 +1061,12 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             contact_type = $8::contact_type_enum,
             status = $9::contact_status_enum,
             linkedin_profile_url = $10,
-            attributes = $11::contact_attribute_enum[],
-            updated_by = $12
-          where unique_id = $13 and organization_id = $14
+            billing_address = $11,
+            shipping_address = $12,
+            shipping_same_as_billing = $13,
+            attributes = $14::contact_attribute_enum[],
+            updated_by = $15
+          where unique_id = $16 and organization_id = $17
           returning unique_id
           `,
           [
@@ -1051,6 +1080,9 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             payload.contactType,
             payload.status,
             payload.linkedInProfileUrl ?? null,
+            payload.billingAddress ?? null,
+            payload.shippingAddress ?? null,
+            payload.shippingSameAsBilling ?? false,
             payload.attributes ?? [],
             actorUserId,
             payload.id,

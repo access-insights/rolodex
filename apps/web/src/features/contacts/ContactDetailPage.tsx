@@ -23,6 +23,9 @@ type ContactFormState = {
   referredBy: string;
   referredByContactId: string;
   linkedInProfileUrl: string;
+  billingAddress: string;
+  shippingAddress: string;
+  shippingSameAsBilling: boolean;
   attributes: ContactAttribute[];
   phones: ContactMethod[];
   emails: ContactMethod[];
@@ -86,6 +89,16 @@ const normalizeAttributes = (value: unknown): ContactAttribute[] => {
 };
 
 const normalizePersonName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+const displayNameFromIdentity = (value?: string) => {
+  if (!value) return "Unknown user";
+  const source = value.includes("@") ? value.split("@")[0] : value;
+  const cleaned = source.replace(/[._-]+/g, " ").trim();
+  if (!cleaned) return value;
+  return cleaned
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
 
 const toFormState = (detail: ContactDetail): ContactFormState => ({
   firstName: detail.firstName,
@@ -98,6 +111,9 @@ const toFormState = (detail: ContactDetail): ContactFormState => ({
   referredBy: detail.referredByContact ? `${detail.referredByContact.firstName} ${detail.referredByContact.lastName}` : detail.referredBy ?? "",
   referredByContactId: detail.referredByContactId ?? "",
   linkedInProfileUrl: detail.linkedInProfileUrl ?? "",
+  billingAddress: detail.billingAddress ?? "",
+  shippingAddress: detail.shippingAddress ?? "",
+  shippingSameAsBilling: Boolean(detail.shippingSameAsBilling),
   attributes: normalizeAttributes(detail.attributes),
   phones: detail.phones.length > 0 ? detail.phones : [emptyMethod()],
   emails: detail.emails.length > 0 ? detail.emails : [emptyMethod()],
@@ -225,6 +241,10 @@ export function ContactDetailPage() {
 
   const isAdmin = user?.role === "admin";
   const canEdit = user?.role === "admin" || user?.role === "creator";
+  const recordEnteredByDisplay =
+    detail?.recordEnteredBy && detail.recordEnteredBy !== "Unknown user"
+      ? detail.recordEnteredBy
+      : displayNameFromIdentity(user?.email || user?.id);
 
   const visibleComments = useMemo(() => {
     const all = detail?.comments ?? [];
@@ -398,6 +418,9 @@ export function ContactDetailPage() {
       referredBy: resolvedReferredBy,
       referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: form.linkedInProfileUrl || undefined,
+      billingAddress: form.billingAddress || undefined,
+      shippingAddress: (form.shippingSameAsBilling ? form.billingAddress : form.shippingAddress) || undefined,
+      shippingSameAsBilling: form.shippingSameAsBilling,
       attributes: form.attributes,
       phones: form.phones
         .map((entry) => ({ ...entry, value: formatPhoneNumber(entry.value) }))
@@ -498,6 +521,9 @@ export function ContactDetailPage() {
       referredBy: resolvedReferredBy,
       referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: form.linkedInProfileUrl || undefined,
+      billingAddress: form.billingAddress || undefined,
+      shippingAddress: (form.shippingSameAsBilling ? form.billingAddress : form.shippingAddress) || undefined,
+      shippingSameAsBilling: form.shippingSameAsBilling,
       attributes: form.attributes,
       phones: form.phones
         .map((entry) => ({ ...entry, value: formatPhoneNumber(entry.value) }))
@@ -551,7 +577,7 @@ export function ContactDetailPage() {
           <h1 id="contact-title" className="contact-name">
             {detail.lastName}, {detail.firstName}
           </h1>
-          <p className="contact-meta">Record entered by: {detail.recordEnteredBy || "Unknown user"}</p>
+          <p className="contact-meta">Record entered by: {recordEnteredByDisplay}</p>
         </div>
         {canEdit ? (
           <button className="btn" onClick={() => setEditing((value) => !value)} aria-label="Edit contact">
@@ -685,6 +711,62 @@ export function ContactDetailPage() {
                 ) : null}
               </div>
             </label>
+            <label className="md:col-span-2">
+              <span className="mb-1 block text-sm text-muted">Billing Address</span>
+              <textarea
+                className="input min-h-24"
+                value={form.billingAddress}
+                onChange={(event) => {
+                  const billingAddress = event.target.value;
+                  setForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          billingAddress,
+                          shippingAddress: prev.shippingSameAsBilling ? billingAddress : prev.shippingAddress
+                        }
+                      : prev
+                  );
+                }}
+              />
+            </label>
+            <label className="inline-flex items-center gap-2 md:col-span-2">
+              <input
+                type="checkbox"
+                checked={form.shippingSameAsBilling}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          shippingSameAsBilling: checked,
+                          shippingAddress: checked ? prev.billingAddress : prev.shippingAddress
+                        }
+                      : prev
+                  );
+                }}
+              />
+              <span>Shipping address is the same as billing</span>
+            </label>
+            <label className="md:col-span-2">
+              <span className="mb-1 block text-sm text-muted">Shipping Address</span>
+              <textarea
+                className="input min-h-24"
+                value={form.shippingSameAsBilling ? form.billingAddress : form.shippingAddress}
+                onChange={(event) =>
+                  setForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          shippingAddress: event.target.value
+                        }
+                      : prev
+                  )
+                }
+                disabled={form.shippingSameAsBilling}
+              />
+            </label>
           </div>
         ) : (
           <>
@@ -786,6 +868,22 @@ export function ContactDetailPage() {
           </>
         )}
       </div>
+
+      <section className="contact-card" aria-label="Addresses">
+        <h2 className="contact-section-title">Addresses</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded border border-border bg-canvas p-3">
+            <p className="text-sm text-muted">Billing Address</p>
+            <p className="mt-2 whitespace-pre-wrap">{detail.billingAddress || "-"}</p>
+          </div>
+          <div className="rounded border border-border bg-canvas p-3">
+            <p className="text-sm text-muted">Shipping Address</p>
+            <p className="mt-2 whitespace-pre-wrap">
+              {detail.shippingSameAsBilling ? detail.billingAddress || "-" : detail.shippingAddress || "-"}
+            </p>
+          </div>
+        </div>
+      </section>
 
       <section className="contact-card" aria-label="Referrals">
         <h2 className="contact-section-title">Referrals</h2>
