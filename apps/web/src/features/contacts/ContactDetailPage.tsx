@@ -112,6 +112,7 @@ function MethodsEditor({
   disabled,
   onChange,
   onAdd,
+  addActionLabel,
   onValueBlur
 }: {
   label: string;
@@ -121,16 +122,12 @@ function MethodsEditor({
   disabled: boolean;
   onChange: (index: number, field: "label" | "value", value: string) => void;
   onAdd: () => void;
+  addActionLabel: string;
   onValueBlur?: (index: number, value: string) => void;
 }) {
   return (
     <section className="rounded border border-border bg-surface p-4" aria-label={label}>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{label}</h3>
-        <button type="button" className="btn" onClick={onAdd} disabled={disabled}>
-          Add {label.slice(0, -1)}
-        </button>
-      </div>
+      <h3 className="mb-3 text-lg font-semibold">{label}</h3>
       <div className="space-y-3">
         {items.map((item, index) => (
           <div key={`${label}-${index}`} className="grid gap-2 md:grid-cols-2">
@@ -165,6 +162,9 @@ function MethodsEditor({
           </div>
         ))}
       </div>
+      <button type="button" className="nav-link mt-3" onClick={onAdd} disabled={disabled}>
+        {addActionLabel}
+      </button>
     </section>
   );
 }
@@ -632,6 +632,7 @@ export function ContactDetailPage() {
           disabled={!editing}
           onChange={(index, field, value) => setMethodField("phones", index, field, value)}
           onAdd={() => addMethod("phones")}
+          addActionLabel="Add New Number"
           onValueBlur={(index, value) => setMethodField("phones", index, "value", formatPhoneNumber(value))}
         />
         <MethodsEditor
@@ -642,6 +643,7 @@ export function ContactDetailPage() {
           disabled={!editing}
           onChange={(index, field, value) => setMethodField("emails", index, field, value)}
           onAdd={() => addMethod("emails")}
+          addActionLabel="Add New Email"
         />
         <MethodsEditor
           label="Websites"
@@ -651,6 +653,7 @@ export function ContactDetailPage() {
           disabled={!editing}
           onChange={(index, field, value) => setMethodField("websites", index, field, value)}
           onAdd={() => addMethod("websites")}
+          addActionLabel="Add New Website"
         />
       </div>
 
