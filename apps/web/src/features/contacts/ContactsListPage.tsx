@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Modal } from "../../components/Modal";
 import { apiClient, type ContactListItem } from "../../lib/apiClient";
 import { useAuth } from "../auth/AuthContext";
@@ -10,7 +10,9 @@ type FilterColumn = "Type" | "Status" | "Company";
 
 export function ContactsListPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const csvInputRef = useRef<HTMLInputElement | null>(null);
+  const importMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [contacts, setContacts] = useState<ContactListItem[]>([]);
   const [search, setSearch] = useState("");
@@ -20,10 +22,9 @@ export function ContactsListPage() {
 
   const [linkedinOpen, setLinkedinOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
   const [linkedInUrl, setLinkedInUrl] = useState("");
-  const [linkedInFirstName, setLinkedInFirstName] = useState("");
-  const [linkedInLastName, setLinkedInLastName] = useState("");
-  const [linkedInCompany, setLinkedInCompany] = useState("");
+  const [linkedInDuplicate, setLinkedInDuplicate] = useState<{ id: string; name: string } | null>(null);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Loading contacts...");
@@ -48,6 +49,19 @@ export function ContactsListPage() {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [search]);
+
+  useEffect(() => {
+    if (!importMenuOpen) return;
+
+    const onWindowMouseDown = (event: MouseEvent) => {
+      if (!importMenuRef.current?.contains(event.target as Node)) {
+        setImportMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", onWindowMouseDown);
+    return () => window.removeEventListener("mousedown", onWindowMouseDown);
+  }, [importMenuOpen]);
 
   const filterValues = useMemo(() => {
     const unique = new Set<string>();
@@ -97,24 +111,31 @@ export function ContactsListPage() {
     setStatusMessage("Importing LinkedIn profile...");
 
     const result = await apiClient.importLinkedIn({
-      profileUrl: linkedInUrl,
-      firstName: linkedInFirstName || undefined,
-      lastName: linkedInLastName || undefined,
-      company: linkedInCompany || undefined
+      profileUrl: linkedInUrl
     });
 
-    if (!result.ok) {
+    if (!result.ok || !result.data) {
+      if (result.error?.code === "DUPLICATE_CONTACT") {
+        const existingId = String(result.meta?.existingContactId || "");
+        if (existingId) {
+          setLinkedInDuplicate({
+            id: existingId,
+            name: String(result.meta?.existingContactName || "existing contact")
+          });
+          return;
+        }
+      }
       setStatusMessage(result.error?.message || "LinkedIn import failed.");
       return;
     }
 
     setLinkedinOpen(false);
+    setImportMenuOpen(false);
     setLinkedInUrl("");
-    setLinkedInFirstName("");
-    setLinkedInLastName("");
-    setLinkedInCompany("");
-    setStatusMessage("LinkedIn import complete.");
+    setLinkedInDuplicate(null);
+    setStatusMessage("LinkedIn import complete. Opening new contact...");
     await loadContacts();
+    navigate(`/contacts/${result.data.id}?edit=1&new=1`);
   };
 
   const submitCsvImport = async () => {
@@ -161,23 +182,49 @@ export function ContactsListPage() {
         <h1 id="contacts-title" className="text-2xl font-semibold">
           Contacts
         </h1>
-        <details className="relative">
-          <summary className="btn cursor-pointer list-none">Import</summary>
-          <div className="absolute right-0 z-10 mt-2 w-48 rounded border border-border bg-surface p-2 shadow-lg">
-            <button type="button" className="nav-link w-full text-left" onClick={() => setLinkedinOpen(true)}>
-              Import from LinkedIn
-            </button>
-            <button type="button" className="nav-link mt-1 w-full text-left" onClick={() => setCsvOpen(true)}>
-              Import from CSV
-            </button>
-          </div>
-        </details>
+        <div
+          className="relative"
+          ref={importMenuRef}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setImportMenuOpen(false);
+            }
+          }}
+        >
+          <button type="button" className="btn" onClick={() => setImportMenuOpen((open) => !open)} aria-expanded={importMenuOpen} aria-haspopup="menu">
+            Import
+          </button>
+          {importMenuOpen ? (
+            <div className="absolute right-0 z-10 mt-2 w-48 rounded border border-border bg-surface p-2 shadow-lg" role="menu">
+              <button
+                type="button"
+                className="nav-link w-full text-left"
+                onClick={() => {
+                  setLinkedinOpen(true);
+                  setImportMenuOpen(false);
+                }}
+              >
+                Import from LinkedIn
+              </button>
+              <button
+                type="button"
+                className="nav-link mt-1 w-full text-left"
+                onClick={() => {
+                  setCsvOpen(true);
+                  setImportMenuOpen(false);
+                }}
+              >
+                Import from CSV
+              </button>
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <div className="grid gap-4 rounded border border-border bg-surface p-4 lg:grid-cols-[1.5fr_1fr_1fr]">
         <section aria-label="Search and filters" className="space-y-2">
           <label className="block">
-            <span className="mb-1 block text-sm text-muted">Search all contact fields</span>
+            <span className="mb-1 block text-sm text-muted">Search</span>
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="input" placeholder="Search" />
           </label>
 
@@ -235,9 +282,6 @@ export function ContactsListPage() {
           <thead>
             <tr className="border-b border-border text-left">
               <th scope="col" className="px-3 py-2">
-                ID
-              </th>
-              <th scope="col" className="px-3 py-2">
                 Last Name
               </th>
               <th scope="col" className="px-3 py-2">
@@ -262,37 +306,35 @@ export function ContactsListPage() {
             return (
               <tbody key={letter} id={`letter-${letter}`}>
                 <tr className="border-y border-border bg-canvas">
-                  <th className="px-3 py-2 text-left" colSpan={7} scope="rowgroup">
+                  <th className="px-3 py-2 text-left" colSpan={6} scope="rowgroup">
                     {letter}
                   </th>
                 </tr>
                 {rows.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-2 text-muted" colSpan={7}>
+                    <td className="px-3 py-2 text-muted" colSpan={6}>
                       No contacts in this section.
                     </td>
                   </tr>
                 ) : (
                   rows.map((contact) => (
                     <tr key={contact.id} className="border-b border-border">
-                      <td className="px-3 py-2">
-                        <Link to={`/contacts/${contact.id}`} className="nav-link">
-                          {contact.id.slice(0, 8)}
-                        </Link>
-                      </td>
                       <td className="px-3 py-2">{contact.lastName}</td>
                       <td className="px-3 py-2">{contact.firstName}</td>
                       <td className="px-3 py-2">{contact.company || "Unknown"}</td>
                       <td className="px-3 py-2">{contact.contactType}</td>
                       <td className="px-3 py-2">{contact.status}</td>
                       <td className="px-3 py-2">
-                        {isAdmin ? (
-                          <button type="button" className="btn" onClick={() => setConfirmDeleteId(contact.id)}>
-                            Delete
-                          </button>
-                        ) : (
-                          <span className="text-sm text-muted">No actions</span>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          <Link to={`/contacts/${contact.id}`} className="btn">
+                            View
+                          </Link>
+                          {isAdmin ? (
+                            <button type="button" className="btn" onClick={() => setConfirmDeleteId(contact.id)}>
+                              Delete
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -320,27 +362,50 @@ export function ContactsListPage() {
               placeholder="https://www.linkedin.com/in/example"
             />
           </label>
-
-          <div className="grid gap-2 md:grid-cols-2">
-            <label>
-              <span className="mb-1 block text-sm text-muted">First name</span>
-              <input className="input" value={linkedInFirstName} onChange={(event) => setLinkedInFirstName(event.target.value)} />
-            </label>
-            <label>
-              <span className="mb-1 block text-sm text-muted">Last name</span>
-              <input className="input" value={linkedInLastName} onChange={(event) => setLinkedInLastName(event.target.value)} />
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="mb-1 block text-sm text-muted">Company</span>
-            <input className="input" value={linkedInCompany} onChange={(event) => setLinkedInCompany(event.target.value)} />
-          </label>
-
           <button type="submit" className="btn">
-            Import
+            Add New Contact
           </button>
         </form>
+      </Modal>
+
+      <Modal open={Boolean(linkedInDuplicate)} onClose={() => setLinkedInDuplicate(null)} title="Possible Duplicate Found" labelledById="linkedin-duplicate-title">
+        <p>
+          A similar contact already exists: <strong>{linkedInDuplicate?.name}</strong>.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            className="btn"
+            onClick={async () => {
+              const result = await apiClient.importLinkedIn({ profileUrl: linkedInUrl, allowDuplicate: true });
+              if (!result.ok || !result.data) {
+                setStatusMessage(result.error?.message || "LinkedIn import failed.");
+                return;
+              }
+              setLinkedInDuplicate(null);
+              setLinkedinOpen(false);
+              setLinkedInUrl("");
+              setStatusMessage("LinkedIn import complete. Opening new contact...");
+              await loadContacts();
+              navigate(`/contacts/${result.data.id}?edit=1&new=1`);
+            }}
+          >
+            Proceed Anyway
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              if (linkedInDuplicate?.id) {
+                navigate(`/contacts/${linkedInDuplicate.id}`);
+              }
+              setLinkedInDuplicate(null);
+              setLinkedinOpen(false);
+            }}
+          >
+            Edit Existing
+          </button>
+        </div>
       </Modal>
 
       <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="Import from CSV" labelledById="import-csv-title">

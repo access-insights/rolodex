@@ -24,6 +24,7 @@ export function LoginPage() {
       className="flex min-h-screen items-center justify-center bg-white px-4 text-black"
     >
       <div className="w-full max-w-sm text-center">
+        <p className="text-sm uppercase tracking-[0.2em] text-muted">Access Insights</p>
         <h1 id="login-title" className="text-4xl font-semibold tracking-tight">
           Rolodex
         </h1>

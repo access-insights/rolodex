@@ -14,6 +14,7 @@ describe("App shell", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Rolodex" })).toBeInTheDocument();
+    expect(screen.getByText("Access Insights")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Login" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Primary" })).not.toBeInTheDocument();
   });

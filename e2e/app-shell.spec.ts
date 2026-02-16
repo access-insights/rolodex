@@ -97,7 +97,7 @@ test("login, open contact detail, add comment", async ({ page }) => {
   await expect(page).toHaveURL(/\/contacts/);
   await expect(page.getByRole("heading", { name: "Contacts" })).toBeVisible();
 
-  await page.getByRole("link", { name: "33333333" }).click();
+  await page.getByRole("link", { name: "View" }).first().click();
 
   await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}`));
   await expect(page.getByRole("heading", { name: "Price, Jordan" })).toBeVisible();

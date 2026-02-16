@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Modal } from "../../components/Modal";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -18,8 +18,8 @@ type ContactFormState = {
   lastName: string;
   company: string;
   role: string;
-  contactType: ContactType;
-  status: ContactStatus;
+  contactType: ContactType | "";
+  status: ContactStatus | "";
   internalContact: string;
   referredBy: string;
   referredByContactId: string;
@@ -48,6 +48,7 @@ const attributeOptions: ContactAttribute[] = [
 const phoneLabelOptions = ["Mobile", "Work", "Home", "Direct", "Assistant", "Other"];
 const emailLabelOptions = ["Work", "Personal", "Billing", "Support", "Other"];
 const websiteLabelOptions = ["Company", "LinkedIn", "Personal", "Portfolio", "Other"];
+const shortContactId = (id: string) => `${id.slice(0, 8)}...${id.slice(-4)}`;
 
 const emptyMethod = (): ContactMethod => ({ label: "", value: "" });
 
@@ -105,7 +106,6 @@ const toFormState = (detail: ContactDetail): ContactFormState => ({
 
 function MethodsEditor({
   label,
-  iconLabel,
   labelOptions,
   valueType,
   items,
@@ -115,7 +115,6 @@ function MethodsEditor({
   onValueBlur
 }: {
   label: string;
-  iconLabel: string;
   labelOptions: string[];
   valueType: "tel" | "email" | "url";
   items: ContactMethod[];
@@ -127,12 +126,7 @@ function MethodsEditor({
   return (
     <section className="rounded border border-border bg-surface p-4" aria-label={label}>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-lg font-semibold">
-          <span aria-hidden="true" className="mr-2 text-sm text-muted">
-            [{iconLabel}]
-          </span>
-          {label}
-        </h3>
+        <h3 className="text-lg font-semibold">{label}</h3>
         <button type="button" className="btn" onClick={onAdd} disabled={disabled}>
           Add {label.slice(0, -1)}
         </button>
@@ -207,6 +201,7 @@ function LinkedInHistoryModal({
 export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
   const [detail, setDetail] = useState<ContactDetail | null>(null);
@@ -240,11 +235,19 @@ export function ContactDetailPage() {
           return;
         }
         setDetail(result.data);
-        setForm(toFormState(result.data));
+        const initialForm = toFormState(result.data);
+        if (searchParams.get("new") === "1") {
+          initialForm.contactType = "";
+          initialForm.status = "";
+        }
+        setForm(initialForm);
+        if (searchParams.get("edit") === "1") {
+          setEditing(true);
+        }
         setStatusMessage("Loaded.");
       })
       .catch(() => setStatusMessage("Unable to load contact."));
-  }, [id]);
+  }, [id, searchParams]);
 
   useEffect(() => {
     if (!editing) return;
@@ -306,6 +309,11 @@ export function ContactDetailPage() {
 
   const save = async (closeAfter = false) => {
     if (!id || !form) return;
+
+    if (!form.contactType || !form.status) {
+      setStatusMessage("Type and Status are required.");
+      return;
+    }
 
     if (form.referredBy.trim() && !form.referredByContactId) {
       setStatusMessage("Select a referred-by contact from suggestions.");
@@ -414,7 +422,11 @@ export function ContactDetailPage() {
 
   const onArchiveContact = async () => {
     if (!id || !form || !canEdit) return;
-    const payload = { ...form, id, status: "Archived" as const };
+    if (!form.contactType) {
+      setStatusMessage("Type is required before archiving.");
+      return;
+    }
+    const payload = { ...form, id, contactType: form.contactType as ContactType, status: "Archived" as const };
     const result = await apiClient.updateContact(payload);
     setConfirmArchive(false);
     if (!result.ok || !result.data) {
@@ -461,7 +473,9 @@ export function ContactDetailPage() {
           <h1 id="contact-title" className="text-2xl font-semibold">
             {detail.lastName}, {detail.firstName}
           </h1>
-          <p className="text-sm text-muted">ID: {detail.id}</p>
+          <p className="text-sm text-muted" title={detail.id}>
+            ID: {shortContactId(detail.id)}
+          </p>
         </div>
         {canEdit ? (
           <button className="btn" onClick={() => setEditing((value) => !value)} aria-label="Edit contact">
@@ -489,7 +503,12 @@ export function ContactDetailPage() {
         </label>
         <label>
           <span className="mb-1 block text-sm text-muted">Type</span>
-          <select className="input" value={form.contactType} onChange={(event) => setForm({ ...form, contactType: event.target.value as ContactType })} disabled={!editing}>
+          <select
+            className="input"
+            value={form.contactType}
+            onChange={(event) => setForm({ ...form, contactType: event.target.value as ContactType | "" })}
+            disabled={!editing}
+          >
             <option value="" disabled>
               Select type
             </option>
@@ -502,7 +521,12 @@ export function ContactDetailPage() {
         </label>
         <label>
           <span className="mb-1 block text-sm text-muted">Status</span>
-          <select className="input" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as ContactStatus })} disabled={!editing}>
+          <select
+            className="input"
+            value={form.status}
+            onChange={(event) => setForm({ ...form, status: event.target.value as ContactStatus | "" })}
+            disabled={!editing}
+          >
             <option value="" disabled>
               Select status
             </option>
@@ -602,7 +626,6 @@ export function ContactDetailPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <MethodsEditor
           label="Phone Numbers"
-          iconLabel="PHONE"
           labelOptions={phoneLabelOptions}
           valueType="tel"
           items={form.phones}
@@ -613,7 +636,6 @@ export function ContactDetailPage() {
         />
         <MethodsEditor
           label="Email Addresses"
-          iconLabel="EMAIL"
           labelOptions={emailLabelOptions}
           valueType="email"
           items={form.emails}
@@ -623,7 +645,6 @@ export function ContactDetailPage() {
         />
         <MethodsEditor
           label="Websites"
-          iconLabel="WEB"
           labelOptions={websiteLabelOptions}
           valueType="url"
           items={form.websites}

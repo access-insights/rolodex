@@ -102,6 +102,7 @@ export type ContactUpsertInput = {
   referredBy?: string;
   referredByContactId?: string;
   linkedInProfileUrl?: string;
+  allowDuplicate?: boolean;
   attributes?: ContactAttribute[];
   phones?: ContactMethod[];
   emails?: ContactMethod[];
@@ -163,7 +164,7 @@ export const apiClient = {
     }),
   deleteContact: (id: string) => request<{ deleted: boolean }>("contact.delete", undefined, { id }),
 
-  importLinkedIn: (payload: { contactId?: string; profileUrl: string; firstName?: string; lastName?: string; company?: string }) =>
+  importLinkedIn: (payload: { contactId?: string; profileUrl: string; firstName?: string; lastName?: string; company?: string; allowDuplicate?: boolean }) =>
     request<ContactDetail>("contact.importLinkedIn", {
       method: "POST",
       body: JSON.stringify(payload)

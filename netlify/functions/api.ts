@@ -94,6 +94,12 @@ type DbLinkedInHistory = {
   created_at: string;
 };
 
+type DuplicateContactMatch = {
+  unique_id: string;
+  first_name: string;
+  last_name: string;
+};
+
 type ContactMethodInput = {
   label?: string;
   value: string;
@@ -331,13 +337,17 @@ const contactUpsertSchema = z.object({
   emails: z.array(methodEntrySchema).max(25).optional(),
   websites: z.array(methodEntrySchema).max(25).optional()
 });
+const createContactSchema = contactUpsertSchema.extend({
+  allowDuplicate: z.boolean().optional()
+});
 
 const linkedInImportSchema = z.object({
   contactId: z.string().uuid().optional(),
   profileUrl: z.string().trim().url(),
   firstName: z.string().trim().min(1).max(120).optional(),
   lastName: z.string().trim().min(1).max(120).optional(),
-  company: z.string().trim().max(240).optional()
+  company: z.string().trim().max(240).optional(),
+  allowDuplicate: z.boolean().optional()
 });
 
 const csvImportSchema = z.object({
@@ -666,17 +676,63 @@ const replaceContactMethods = async (
 
 const extractLinkedInSnapshot = (profileUrl: string) => {
   const parsed = new URL(profileUrl);
-  const slug = parsed.pathname.split("/").filter(Boolean).pop() || "profile";
-  const safeSlug = slug.replace(/[^a-zA-Z0-9-]/g, "");
+  const slug = parsed.pathname.split("/").filter(Boolean).pop() || "";
+  const cleanSlug = slug
+    .replace(/[0-9]/g, " ")
+    .replace(/[_\-+.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const parts = cleanSlug
+    .split(" ")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  const toTitleCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+  const firstName = parts[0] ? toTitleCase(parts[0]) : "LinkedIn";
+  const lastName = parts[1] ? toTitleCase(parts[1]) : "Contact";
 
   return {
     profileUrl,
-    profilePictureUrl: `https://picsum.photos/seed/${encodeURIComponent(safeSlug)}/200/200`,
-    company: `Org ${safeSlug.slice(0, 24) || "Profile"}`,
-    jobTitle: "Relationship Lead",
-    location: "United States",
-    capturedFromHost: parsed.hostname
+    firstName,
+    lastName,
+    company: null as string | null,
+    jobTitle: null as string | null,
+    location: null as string | null,
+    profilePictureUrl: null as string | null,
+    capturedFromHost: parsed.hostname,
+    profileSlug: slug
   };
+};
+
+const findDuplicateContact = async (
+  client: PoolClient,
+  orgId: string,
+  input: { firstName: string; lastName: string; company?: string | null; linkedInProfileUrl?: string | null }
+) => {
+  const duplicate = await client.query<DuplicateContactMatch>(
+    `
+    select unique_id, first_name, last_name
+    from contacts
+    where organization_id = $1
+      and (
+        (
+          nullif($2, '') is not null
+          and lower(coalesce(linkedin_profile_url, '')) = lower($2)
+        )
+        or (
+          lower(first_name) = lower($3)
+          and lower(last_name) = lower($4)
+          and (
+            nullif($5, '') is null
+            or lower(coalesce(organization, '')) = lower($5)
+          )
+        )
+      )
+    limit 1
+    `,
+    [orgId, input.linkedInProfileUrl?.trim() ?? "", input.firstName.trim(), input.lastName.trim(), input.company?.trim() ?? ""]
+  );
+
+  return duplicate.rows[0] ?? null;
 };
 
 const parseCsvRows = (csvContent: string) => {
@@ -901,8 +957,31 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
 
       case "entities/create": {
         requireRole(ctx, ["admin", "creator"]);
-        const payload = contactUpsertSchema.parse(parseBody(event));
+        const payload = createContactSchema.parse(parseBody(event));
         const actorUserId = await getActorUserId(client, ctx);
+
+        if (!payload.allowDuplicate) {
+          const duplicate = await findDuplicateContact(client, ctx.orgId, {
+            firstName: payload.firstName,
+            lastName: payload.lastName,
+            company: payload.company ?? null,
+            linkedInProfileUrl: payload.linkedInProfileUrl ?? null
+          });
+
+          if (duplicate) {
+            return json(409, {
+              ok: false,
+              error: {
+                code: "DUPLICATE_CONTACT",
+                message: "Possible duplicate contact found."
+              },
+              meta: {
+                existingContactId: duplicate.unique_id,
+                existingContactName: `${duplicate.first_name} ${duplicate.last_name}`
+              }
+            });
+          }
+        }
 
         const created = await client.query<{ unique_id: string }>(
           `
@@ -1073,6 +1152,33 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
 
         let contactId = payload.contactId;
         if (!contactId) {
+          const firstName = payload.firstName || snapshot.firstName;
+          const lastName = payload.lastName || snapshot.lastName;
+          const company = payload.company || snapshot.company;
+
+          if (!payload.allowDuplicate) {
+            const duplicate = await findDuplicateContact(client, ctx.orgId, {
+              firstName,
+              lastName,
+              company,
+              linkedInProfileUrl: payload.profileUrl
+            });
+
+            if (duplicate) {
+              return json(409, {
+                ok: false,
+                error: {
+                  code: "DUPLICATE_CONTACT",
+                  message: "Possible duplicate contact found."
+                },
+                meta: {
+                  existingContactId: duplicate.unique_id,
+                  existingContactName: `${duplicate.first_name} ${duplicate.last_name}`
+                }
+              });
+            }
+          }
+
           const inserted = await client.query<{ unique_id: string }>(
             `
             insert into contacts (
@@ -1111,10 +1217,10 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
             `,
             [
               ctx.orgId,
-              payload.firstName || "LinkedIn",
-              payload.lastName || "Import",
-              payload.company || snapshot.company,
-              snapshot.jobTitle,
+              firstName,
+              lastName,
+              company,
+              null,
               payload.profileUrl,
               snapshot.profilePictureUrl,
               snapshot.company,
