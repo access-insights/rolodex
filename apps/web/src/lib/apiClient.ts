@@ -56,6 +56,7 @@ export type ContactListItem = {
   linkedInJobTitle?: string | null;
   linkedInLocation?: string | null;
   attributes: ContactAttribute[];
+  recordEnteredBy?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };

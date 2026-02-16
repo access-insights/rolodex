@@ -50,7 +50,8 @@ describe("Contacts list role behavior", () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole("button", { name: "Delete" })).toBeInTheDocument();
+    await screen.findByText(/loaded/i);
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("hides delete button for non-admin roles", async () => {

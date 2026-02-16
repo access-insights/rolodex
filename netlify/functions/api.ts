@@ -66,6 +66,8 @@ type DbContact = {
   linkedin_job_title: string | null;
   linkedin_location: string | null;
   attributes: ContactAttribute[];
+  creator_name: string | null;
+  creator_email: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -365,6 +367,7 @@ const mapContactSummary = (contact: DbContact) => ({
   linkedInJobTitle: contact.linkedin_job_title,
   linkedInLocation: contact.linkedin_location,
   attributes: normalizeContactAttributes(contact.attributes) ?? [],
+  recordEnteredBy: contact.creator_name || contact.creator_email || "Unknown user",
   createdAt: contact.created_at,
   updatedAt: contact.updated_at
 });
@@ -492,27 +495,30 @@ const loadContactSummary = async (client: PoolClient, orgId: string, id: string)
   const contact = await client.query<DbContact>(
     `
     select
-      unique_id,
-      organization_id,
-      first_name,
-      last_name,
-      organization,
-      role,
-      internal_contact,
-      referred_by,
-      referred_by_contact_id,
-      contact_type,
-      status,
-      linkedin_profile_url,
-      linkedin_picture_url,
-      linkedin_company,
-      linkedin_job_title,
-      linkedin_location,
-      attributes,
-      created_at,
-      updated_at
-    from contacts
-    where unique_id = $1 and organization_id = $2
+      c.unique_id,
+      c.organization_id,
+      c.first_name,
+      c.last_name,
+      c.organization,
+      c.role,
+      c.internal_contact,
+      c.referred_by,
+      c.referred_by_contact_id,
+      c.contact_type,
+      c.status,
+      c.linkedin_profile_url,
+      c.linkedin_picture_url,
+      c.linkedin_company,
+      c.linkedin_job_title,
+      c.linkedin_location,
+      c.attributes,
+      u.display_name as creator_name,
+      u.email as creator_email,
+      c.created_at,
+      c.updated_at
+    from contacts c
+    left join users u on u.id = c.created_by and u.organization_id = c.organization_id
+    where c.unique_id = $1 and c.organization_id = $2
     limit 1
     `,
     [id, orgId]
@@ -825,63 +831,66 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
         const contacts = await client.query<DbContact>(
           `
           select
-            unique_id,
-            organization_id,
-            first_name,
-            last_name,
-            organization,
-            role,
-            internal_contact,
-            referred_by,
-            referred_by_contact_id,
-            contact_type,
-            status,
-            linkedin_profile_url,
-            linkedin_picture_url,
-            linkedin_company,
-            linkedin_job_title,
-            linkedin_location,
-            attributes,
-            created_at,
-            updated_at
-          from contacts
-          where organization_id = $1
+            c.unique_id,
+            c.organization_id,
+            c.first_name,
+            c.last_name,
+            c.organization,
+            c.role,
+            c.internal_contact,
+            c.referred_by,
+            c.referred_by_contact_id,
+            c.contact_type,
+            c.status,
+            c.linkedin_profile_url,
+            c.linkedin_picture_url,
+            c.linkedin_company,
+            c.linkedin_job_title,
+            c.linkedin_location,
+            c.attributes,
+            u.display_name as creator_name,
+            u.email as creator_email,
+            c.created_at,
+            c.updated_at
+          from contacts c
+          left join users u on u.id = c.created_by and u.organization_id = c.organization_id
+          where c.organization_id = $1
             and (
               $2 = ''
               or (
-                coalesce(search_document, ''::tsvector) @@ websearch_to_tsquery('simple', $2)
+                coalesce(c.search_document, ''::tsvector) @@ websearch_to_tsquery('simple', $2)
               )
               or exists (
                 select 1
                 from contact_phone_numbers p
-                where p.organization_id = contacts.organization_id
-                  and p.contact_id = contacts.unique_id
+                where p.organization_id = c.organization_id
+                  and p.contact_id = c.unique_id
                   and (p.phone_number ilike ('%' || $2 || '%') or coalesce(p.label, '') ilike ('%' || $2 || '%'))
               )
               or exists (
                 select 1
                 from contact_emails e
-                where e.organization_id = contacts.organization_id
-                  and e.contact_id = contacts.unique_id
+                where e.organization_id = c.organization_id
+                  and e.contact_id = c.unique_id
                   and (e.email ilike ('%' || $2 || '%') or coalesce(e.label, '') ilike ('%' || $2 || '%'))
               )
               or exists (
                 select 1
                 from contact_websites w
-                where w.organization_id = contacts.organization_id
-                  and w.contact_id = contacts.unique_id
+                where w.organization_id = c.organization_id
+                  and w.contact_id = c.unique_id
                   and (w.url ilike ('%' || $2 || '%') or coalesce(w.label, '') ilike ('%' || $2 || '%'))
               )
               or exists (
                 select 1
-                from contact_comments c
-                where c.organization_id = contacts.organization_id
-                  and c.contact_id = contacts.unique_id
-                  and c.deleted_at is null
-                  and c.body ilike ('%' || $2 || '%')
+                from contact_comments cc
+                where cc.organization_id = c.organization_id
+                  and cc.contact_id = c.unique_id
+                  and cc.deleted_at is null
+                  and cc.body ilike ('%' || $2 || '%')
               )
             )
-          order by last_name asc, first_name asc
+          order by c.last_name asc, c.first_name asc
           limit 500
           `,
           [ctx.orgId, searchTerm]

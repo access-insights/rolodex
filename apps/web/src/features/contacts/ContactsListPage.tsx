@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 
 const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-type FilterColumn = "Type" | "Status" | "Company";
+type FilterColumn = "Type" | "Status" | "Company" | "Attributes";
 
 export function ContactsListPage() {
   const { user } = useAuth();
@@ -56,6 +56,15 @@ export function ContactsListPage() {
     if (filterColumn === "Company") {
       contacts.forEach((contact) => unique.add(contact.company || "Unknown"));
     }
+    if (filterColumn === "Attributes") {
+      contacts.forEach((contact) => {
+        if (contact.attributes.length === 0) {
+          unique.add("None");
+          return;
+        }
+        contact.attributes.forEach((attribute) => unique.add(attribute));
+      });
+    }
     return ["All", ...Array.from(unique).sort((a, b) => a.localeCompare(b))];
   }, [contacts, filterColumn]);
 
@@ -66,6 +75,10 @@ export function ContactsListPage() {
         if (filterValue === "All") return true;
         if (filterColumn === "Type") return contact.contactType === filterValue;
         if (filterColumn === "Status") return contact.status === filterValue;
+        if (filterColumn === "Attributes") {
+          if (filterValue === "None") return contact.attributes.length === 0;
+          return contact.attributes.includes(filterValue as ContactListItem["attributes"][number]);
+        }
         return (contact.company || "Unknown") === filterValue;
       })
       .sort((a, b) => {
@@ -160,6 +173,7 @@ export function ContactsListPage() {
                 <option value="Type">Type</option>
                 <option value="Status">Status</option>
                 <option value="Company">Company</option>
+                <option value="Attributes">Attributes</option>
               </select>
             </label>
             <label>

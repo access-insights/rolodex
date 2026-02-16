@@ -47,7 +47,6 @@ const attributeOptions: ContactAttribute[] = [
 const phoneLabelOptions = ["Mobile", "Work", "Home", "Direct", "Assistant", "Other"];
 const emailLabelOptions = ["Work", "Personal", "Billing", "Support", "Other"];
 const websiteLabelOptions = ["Company", "LinkedIn", "Personal", "Portfolio", "Other"];
-const shortContactId = (id: string) => `${id.slice(0, 8)}...${id.slice(-4)}`;
 
 const emptyMethod = (): ContactMethod => ({ label: "", value: "" });
 
@@ -436,8 +435,8 @@ export function ContactDetailPage() {
           <h1 id="contact-title" className="text-2xl font-semibold">
             {detail.lastName}, {detail.firstName}
           </h1>
-          <p className="text-sm text-muted" title={detail.id}>
-            ID: {shortContactId(detail.id)}
+          <p className="text-sm text-muted">
+            Record entered by: {detail.recordEnteredBy || "Unknown user"}
           </p>
         </div>
         {canEdit ? (
