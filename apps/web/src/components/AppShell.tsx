@@ -9,7 +9,7 @@ type AppShellProps = {
 const navItems = [
   { to: "/contacts", label: "Contacts" },
   { to: "/contacts/new", label: "New Contact" },
-  { to: "/admin/users", label: "Admin Users" }
+  { to: "/admin/users", label: "Admin" }
 ];
 
 const toDisplayName = (emailOrId: string) => {

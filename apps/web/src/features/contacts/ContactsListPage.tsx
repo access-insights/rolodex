@@ -13,7 +13,8 @@ export function ContactsListPage() {
   const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const [contacts, setContacts] = useState<ContactListItem[]>([]);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [activeSearch, setActiveSearch] = useState("");
   const [filterColumn, setFilterColumn] = useState<FilterColumn>("Type");
   const [filterValue, setFilterValue] = useState("All");
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -40,10 +41,10 @@ export function ContactsListPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadContacts(search);
-    }, 250);
+      void loadContacts(activeSearch);
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [activeSearch]);
 
   const filterValues = useMemo(() => {
     const unique = new Set<string>();
@@ -122,7 +123,7 @@ export function ContactsListPage() {
       csvInputRef.current.value = "";
     }
     setStatusMessage(`CSV import complete. Inserted ${result.data.insertedCount} contact(s).`);
-    await loadContacts();
+    await loadContacts(activeSearch);
   };
 
   const confirmDelete = async () => {
@@ -136,7 +137,7 @@ export function ContactsListPage() {
     }
 
     setStatusMessage("Contact deleted.");
-    await loadContacts();
+    await loadContacts(activeSearch);
   };
 
   return (
@@ -154,10 +155,26 @@ export function ContactsListPage() {
 
       <div className="grid gap-4 rounded border border-border bg-surface p-4">
         <section aria-label="Search and filters" className="space-y-2">
-          <label className="block">
-            <span className="mb-1 block text-sm text-muted">Search</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} className="input" placeholder="Search" />
-          </label>
+          <form
+            className="space-y-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActiveSearch(searchInput.trim());
+            }}
+          >
+            <label className="block">
+              <span className="mb-1 block text-sm text-muted">Search</span>
+              <input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                className="input"
+                placeholder="Search"
+              />
+            </label>
+            <button type="submit" className="btn">
+              Search
+            </button>
+          </form>
 
           <div className="grid gap-2 md:grid-cols-2">
             <label>
@@ -194,7 +211,6 @@ export function ContactsListPage() {
               checked={includeArchived}
               onChange={(event) => {
                 setIncludeArchived(event.target.checked);
-                void loadContacts(search);
               }}
             />
             <span>Include archived</span>
@@ -203,7 +219,7 @@ export function ContactsListPage() {
             type="button"
             className="btn"
             onClick={() => {
-              void loadContacts(search);
+              void loadContacts(activeSearch);
             }}
           >
             Refresh list

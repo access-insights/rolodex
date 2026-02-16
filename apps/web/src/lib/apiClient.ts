@@ -82,6 +82,15 @@ export type UserListItem = {
   id: string;
   role: AppRole;
   orgId: string;
+  subject?: string;
+  email?: string | null;
+  displayName?: string | null;
+};
+
+export type UserRoleUpdateResult = {
+  id: string;
+  role: AppRole;
+  updated: boolean;
 };
 
 export type ContactUpsertInput = {
@@ -138,7 +147,7 @@ export const apiClient = {
   me: () => request<{ id: string; email?: string; role: string; orgId: string }>("me"),
   listUsers: () => request<UserListItem[]>("users/list"),
   updateUserRole: (userId: string, role: UserListItem["role"]) =>
-    request<UserListItem>("users/update-role", {
+    request<UserRoleUpdateResult>("users/update-role", {
       method: "POST",
       body: JSON.stringify({ userId, role })
     }),
