@@ -326,12 +326,42 @@ body {
   gap: 0.55rem;
 }
 
-.contacts-search-input {
-  width: min(100%, 18rem);
+.contacts-search-inline {
+  position: relative;
+  align-items: center;
+  justify-content: flex-start;
 }
 
-.contacts-import-btn {
-  white-space: nowrap;
+.contacts-search-input {
+  width: min(100%, 18rem);
+  padding-right: 2.6rem;
+}
+
+.contacts-search-icon-btn {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.contacts-search-icon-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.contacts-search-icon-btn:hover {
+  background: color-mix(in oklab, var(--color-surface), #dbe4dd 46%);
+  color: var(--color-text);
 }
 
 .contacts-alpha-nav {
@@ -440,14 +470,15 @@ body {
     font-size: 1.8rem;
   }
 
-  .contacts-import-btn {
-    width: 100%;
-  }
-
   .contacts-search-row {
     justify-content: stretch;
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .contacts-search-inline {
+    align-items: center;
+    flex-direction: row;
   }
 
   .contacts-search-input {

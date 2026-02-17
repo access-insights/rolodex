@@ -1,16 +1,13 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Modal } from "../../components/Modal";
 import { apiClient, type ContactListItem } from "../../lib/apiClient";
 import { useAuth } from "../auth/AuthContext";
 
-const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-
 type FilterColumn = "Type" | "Status" | "Company" | "Attributes";
 
 export function ContactsListPage() {
   const { user } = useAuth();
-  const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const [contacts, setContacts] = useState<ContactListItem[]>([]);
   const [searchInput, setSearchInput] = useState("");
@@ -18,8 +15,6 @@ export function ContactsListPage() {
   const [filterColumn, setFilterColumn] = useState<FilterColumn>("Type");
   const [filterValue, setFilterValue] = useState("All");
   const [includeArchived, setIncludeArchived] = useState(false);
-
-  const [csvOpen, setCsvOpen] = useState(false);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Loading contacts...");
@@ -89,43 +84,6 @@ export function ContactsListPage() {
       });
   }, [contacts, filterColumn, filterValue, includeArchived]);
 
-  const groupedByLetter = useMemo(() => {
-    const groups = new Map<string, ContactListItem[]>();
-    letters.forEach((letter) => groups.set(letter, []));
-
-    for (const contact of filteredContacts) {
-      const first = contact.lastName.charAt(0).toUpperCase();
-      const key = letters.includes(first) ? first : "A";
-      groups.get(key)?.push(contact);
-    }
-
-    return groups;
-  }, [filteredContacts]);
-
-  const submitCsvImport = async () => {
-    const file = csvInputRef.current?.files?.[0];
-    if (!file) {
-      setStatusMessage("Select a CSV file first.");
-      return;
-    }
-
-    setStatusMessage("Importing CSV...");
-    const csvContent = await file.text();
-    const result = await apiClient.importCsv(csvContent);
-
-    if (!result.ok || !result.data) {
-      setStatusMessage(result.error?.message || "CSV import failed.");
-      return;
-    }
-
-    setCsvOpen(false);
-    if (csvInputRef.current) {
-      csvInputRef.current.value = "";
-    }
-    setStatusMessage(`CSV import complete. Inserted ${result.data.insertedCount} contact(s).`);
-    await loadContacts(activeSearch);
-  };
-
   const confirmDelete = async () => {
     if (!confirmDeleteId) return;
 
@@ -146,11 +104,6 @@ export function ContactsListPage() {
         <h1 id="contacts-title" className="text-2xl font-semibold">
           Contacts
         </h1>
-        <div className="relative">
-          <button type="button" className="btn contacts-import-btn" onClick={() => setCsvOpen(true)}>
-            Import from .csv
-          </button>
-        </div>
       </header>
 
       <div className="grid gap-4 rounded border border-border bg-surface p-4">
@@ -162,17 +115,28 @@ export function ContactsListPage() {
               setActiveSearch(searchInput.trim());
             }}
           >
-            <label className="block">
-              <span className="mb-1 block text-sm text-muted">Search</span>
-              <div className="contacts-search-row">
+            <label className="block" aria-label="Search contacts">
+              <div className="contacts-search-row contacts-search-inline">
                 <input
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
                   className="input contacts-search-input"
-                  placeholder="Search"
+                  placeholder="Search contacts"
+                  aria-label="Search contacts"
                 />
-                <button type="submit" className="btn">
-                  Search
+                <button type="submit" className="contacts-search-icon-btn" aria-label="Run search">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
                 </button>
               </div>
             </label>
@@ -256,78 +220,44 @@ export function ContactsListPage() {
                 </th>
               </tr>
             </thead>
-            {letters.map((letter) => {
-              const rows = groupedByLetter.get(letter) || [];
-              return (
-                <tbody key={letter} id={`letter-${letter}`}>
-                  <tr className="border-y border-border bg-canvas">
-                    <th className="px-3 py-2 text-left" colSpan={6} scope="rowgroup">
-                      {letter}
-                    </th>
+            <tbody>
+              {filteredContacts.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-2 text-muted" colSpan={6}>
+                    No contacts found.
+                  </td>
+                </tr>
+              ) : (
+                filteredContacts.map((contact) => (
+                  <tr key={contact.id} className="border-b border-border">
+                    <td className="px-3 py-2">{contact.lastName}</td>
+                    <td className="px-3 py-2">{contact.firstName}</td>
+                    <td className="px-3 py-2">{contact.company || "Unknown"}</td>
+                    <td className="px-3 py-2">{contact.contactType}</td>
+                    <td className="px-3 py-2">{contact.status}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link to={`/contacts/${contact.id}`} className="btn">
+                          View
+                        </Link>
+                        {isAdmin ? (
+                          <button type="button" className="btn" onClick={() => setConfirmDeleteId(contact.id)}>
+                            Delete
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
-                  {rows.length === 0 ? (
-                    <tr>
-                      <td className="px-3 py-2 text-muted" colSpan={6}>
-                        No contacts in this section.
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((contact) => (
-                      <tr key={contact.id} className="border-b border-border">
-                        <td className="px-3 py-2">{contact.lastName}</td>
-                        <td className="px-3 py-2">{contact.firstName}</td>
-                        <td className="px-3 py-2">{contact.company || "Unknown"}</td>
-                        <td className="px-3 py-2">{contact.contactType}</td>
-                        <td className="px-3 py-2">{contact.status}</td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center justify-end gap-2">
-                            <Link to={`/contacts/${contact.id}`} className="btn">
-                              View
-                            </Link>
-                            {isAdmin ? (
-                              <button type="button" className="btn" onClick={() => setConfirmDeleteId(contact.id)}>
-                                Delete
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              );
-            })}
+                ))
+              )}
+            </tbody>
           </table>
         </div>
-        <nav aria-label="Alphabet navigation" className="contacts-alpha-nav">
-          <p className="contacts-alpha-title">A to Z</p>
-          <ul className="contacts-alpha-list">
-            {letters.map((letter) => (
-              <li key={letter}>
-                <a href={`#letter-${letter}`} className="nav-link" aria-label={`Jump to contacts last name starting with ${letter}`}>
-                  {letter}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
       </div>
 
       <p aria-live="polite" className="text-sm text-muted">
         {statusMessage}
       </p>
-
-      <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="Import from CSV" labelledById="import-csv-title">
-        <div className="space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-sm text-muted">CSV file</span>
-            <input ref={csvInputRef} className="input" type="file" accept=".csv,text/csv" />
-          </label>
-          <button type="button" className="btn" onClick={() => void submitCsvImport()}>
-            Upload
-          </button>
-        </div>
-      </Modal>
 
       <Modal open={Boolean(confirmDeleteId)} onClose={() => setConfirmDeleteId(null)} title="Delete Contact" labelledById="delete-contact-confirm-title">
         <p>Delete this contact?</p>

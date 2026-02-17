@@ -926,6 +926,14 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
               or (
                 coalesce(c.search_document, ''::tsvector) @@ websearch_to_tsquery('simple', $2)
               )
+              or c.first_name ilike ('%' || $2 || '%')
+              or c.last_name ilike ('%' || $2 || '%')
+              or coalesce(c.organization, '') ilike ('%' || $2 || '%')
+              or coalesce(c.role, '') ilike ('%' || $2 || '%')
+              or coalesce(c.internal_contact, '') ilike ('%' || $2 || '%')
+              or coalesce(c.referred_by, '') ilike ('%' || $2 || '%')
+              or coalesce(c.linkedin_profile_url, '') ilike ('%' || $2 || '%')
+              or array_to_string(c.attributes::text[], ' ') ilike ('%' || $2 || '%')
               or exists (
                 select 1
                 from contact_phone_numbers p
