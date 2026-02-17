@@ -21,7 +21,8 @@ export type ContactAttribute =
   | "AI Solutions"
   | "Consumer Products"
   | "Disability Services"
-  | "Disability Community";
+  | "Disability Community"
+  | "Investor";
 
 export type ContactMethod = {
   id?: string;

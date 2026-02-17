@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiClient, type ContactAttribute, type ContactStatus, type ContactType, type ContactUpsertInput } from "../../lib/apiClient";
+import {
+  apiClient,
+  type ContactAttribute,
+  type ContactMethod,
+  type ContactStatus,
+  type ContactType,
+  type ContactUpsertInput
+} from "../../lib/apiClient";
 
 const typeOptions: ContactType[] = ["Advisor", "Funder", "Partner", "Client", "General"];
 const statusOptions: ContactStatus[] = ["Active", "Prospect", "Inactive", "Archived"];
@@ -14,10 +21,27 @@ const attributeOptions: ContactAttribute[] = [
   "AI Solutions",
   "Consumer Products",
   "Disability Services",
-  "Disability Community"
+  "Disability Community",
+  "Investor"
 ];
 
+const phoneLabelOptions = ["Mobile", "Work", "Home", "Direct", "Assistant", "Other"];
+const emailLabelOptions = ["Work", "Personal", "Billing", "Support", "Other"];
+const websiteLabelOptions = ["Company", "LinkedIn", "Personal", "Portfolio", "Other"];
+
+const emptyMethod = (): ContactMethod => ({ label: "", value: "" });
 const normalizePersonName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+
+const formatPhoneNumber = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  return value.trim();
+};
 
 export function ContactCreatePage() {
   const navigate = useNavigate();
@@ -39,6 +63,9 @@ export function ContactCreatePage() {
   const [shippingState, setShippingState] = useState("");
   const [shippingZipCode, setShippingZipCode] = useState("");
   const [shippingSameAsBilling, setShippingSameAsBilling] = useState(false);
+  const [phones, setPhones] = useState<ContactMethod[]>([emptyMethod()]);
+  const [emails, setEmails] = useState<ContactMethod[]>([emptyMethod()]);
+  const [websites, setWebsites] = useState<ContactMethod[]>([emptyMethod()]);
   const [referredByMatches, setReferredByMatches] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const [referredByLoading, setReferredByLoading] = useState(false);
 
@@ -85,6 +112,21 @@ export function ContactCreatePage() {
     return { status: "matched" as const, contact: exactMatches[0] };
   };
 
+  const setMethodField = (
+    group: "phones" | "emails" | "websites",
+    index: number,
+    field: "label" | "value",
+    value: string
+  ) => {
+    const setter = group === "phones" ? setPhones : group === "emails" ? setEmails : setWebsites;
+    setter((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item)));
+  };
+
+  const addMethod = (group: "phones" | "emails" | "websites") => {
+    const setter = group === "phones" ? setPhones : group === "emails" ? setEmails : setWebsites;
+    setter((prev) => [...prev, emptyMethod()]);
+  };
+
   const buildPayload = (formData: FormData, referredBy: string, resolvedReferredByContactId: string): ContactUpsertInput => {
     const attributes = attributeOptions.filter((attribute) => formData.get(`attr-${attribute}`) === "on");
     return {
@@ -94,6 +136,7 @@ export function ContactCreatePage() {
       role: String(formData.get("role") || ""),
       contactType: selectedType as ContactType,
       status: selectedStatus as ContactStatus,
+      internalContact: String(formData.get("internalContact") || "") || undefined,
       referredBy: referredBy || undefined,
       referredByContactId: resolvedReferredByContactId || undefined,
       linkedInProfileUrl: String(formData.get("linkedInProfileUrl") || "") || undefined,
@@ -109,9 +152,11 @@ export function ContactCreatePage() {
       shippingZipCode: (shippingSameAsBilling ? billingZipCode : shippingZipCode).trim() || undefined,
       shippingSameAsBilling,
       attributes,
-      phones: [],
-      emails: [],
-      websites: []
+      phones: phones
+        .map((entry) => ({ ...entry, value: formatPhoneNumber(entry.value) }))
+        .filter((entry) => entry.value.trim().length > 0),
+      emails: emails.filter((entry) => entry.value.trim().length > 0),
+      websites: websites.filter((entry) => entry.value.trim().length > 0)
     };
   };
 
@@ -122,6 +167,12 @@ export function ContactCreatePage() {
     const formData = new FormData(event.currentTarget);
     if (!selectedType || !selectedStatus) {
       setStatus("Type and Status are required.");
+      return;
+    }
+
+    const invalidEmail = emails.find((entry) => entry.value.trim().length > 0 && !entry.value.includes("@"));
+    if (invalidEmail) {
+      setStatus("Email addresses must include @.");
       return;
     }
 
@@ -229,6 +280,16 @@ export function ContactCreatePage() {
             </select>
           </label>
 
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">Internal Contact</span>
+            <input name="internalContact" className="input" />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">LinkedIn Profile URL</span>
+            <input name="linkedInProfileUrl" className="input" type="url" placeholder="https://www.linkedin.com/in/example" />
+          </label>
+
           <label className="block md:col-span-2">
             <span className="mb-1 block text-sm text-muted">Referred By</span>
             <input
@@ -279,10 +340,112 @@ export function ContactCreatePage() {
           </label>
         </div>
 
-        <label className="block">
-          <span className="mb-1 block text-sm text-muted">LinkedIn Profile URL</span>
-          <input name="linkedInProfileUrl" className="input" type="url" placeholder="https://www.linkedin.com/in/example" />
-        </label>
+        <div className="grid gap-3 md:grid-cols-3">
+          <section className="rounded border border-border p-3" aria-label="Phone Numbers">
+            <h3 className="text-sm font-semibold">Phone Numbers</h3>
+            <div className="mt-2 space-y-2">
+              {phones.map((item, index) => (
+                <div key={`phone-${index}`} className="grid gap-2">
+                  <select
+                    className="input"
+                    value={item.label ?? ""}
+                    onChange={(event) => setMethodField("phones", index, "label", event.target.value)}
+                    aria-label={`Phone label ${index + 1}`}
+                  >
+                    <option value="">Select label</option>
+                    {phoneLabelOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="Value"
+                    value={item.value}
+                    onChange={(event) => setMethodField("phones", index, "value", event.target.value)}
+                    aria-label={`Phone value ${index + 1}`}
+                  />
+                </div>
+              ))}
+            </div>
+            <button type="button" className="nav-link mt-2" onClick={() => addMethod("phones")}>
+              Add Phone Number
+            </button>
+          </section>
+
+          <section className="rounded border border-border p-3" aria-label="Email Addresses">
+            <h3 className="text-sm font-semibold">Email Addresses</h3>
+            <div className="mt-2 space-y-2">
+              {emails.map((item, index) => (
+                <div key={`email-${index}`} className="grid gap-2">
+                  <select
+                    className="input"
+                    value={item.label ?? ""}
+                    onChange={(event) => setMethodField("emails", index, "label", event.target.value)}
+                    aria-label={`Email label ${index + 1}`}
+                  >
+                    <option value="">Select label</option>
+                    {emailLabelOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    type="email"
+                    inputMode="email"
+                    placeholder="Value"
+                    value={item.value}
+                    onChange={(event) => setMethodField("emails", index, "value", event.target.value)}
+                    aria-label={`Email value ${index + 1}`}
+                  />
+                </div>
+              ))}
+            </div>
+            <button type="button" className="nav-link mt-2" onClick={() => addMethod("emails")}>
+              Add Email Address
+            </button>
+          </section>
+
+          <section className="rounded border border-border p-3" aria-label="Websites">
+            <h3 className="text-sm font-semibold">Websites</h3>
+            <div className="mt-2 space-y-2">
+              {websites.map((item, index) => (
+                <div key={`website-${index}`} className="grid gap-2">
+                  <select
+                    className="input"
+                    value={item.label ?? ""}
+                    onChange={(event) => setMethodField("websites", index, "label", event.target.value)}
+                    aria-label={`Website label ${index + 1}`}
+                  >
+                    <option value="">Select label</option>
+                    {websiteLabelOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    type="url"
+                    inputMode="url"
+                    placeholder="Value"
+                    value={item.value}
+                    onChange={(event) => setMethodField("websites", index, "value", event.target.value)}
+                    aria-label={`Website value ${index + 1}`}
+                  />
+                </div>
+              ))}
+            </div>
+            <button type="button" className="nav-link mt-2" onClick={() => addMethod("websites")}>
+              Add Website
+            </button>
+          </section>
+        </div>
 
         <div className="grid gap-3 md:grid-cols-2">
           <p className="text-sm font-semibold md:col-span-2">Billing Address</p>

@@ -52,7 +52,8 @@ const attributeOptions: ContactAttribute[] = [
   "AI Solutions",
   "Consumer Products",
   "Disability Services",
-  "Disability Community"
+  "Disability Community",
+  "Investor"
 ];
 
 const phoneLabelOptions = ["Mobile", "Work", "Home", "Direct", "Assistant", "Other"];
