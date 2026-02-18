@@ -53,7 +53,8 @@ const attributeOptions: ContactAttribute[] = [
   "Consumer Products",
   "Disability Services",
   "Disability Community",
-  "Investor"
+  "Investor",
+  "Adaptive Sports"
 ];
 
 const phoneLabelOptions = ["Mobile", "Work", "Home", "Direct", "Assistant", "Other"];

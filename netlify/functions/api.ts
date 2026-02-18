@@ -18,7 +18,8 @@ const CONTACT_ATTRIBUTE_VALUES = [
   "Consumer Products",
   "Disability Services",
   "Disability Community",
-  "Investor"
+  "Investor",
+  "Adaptive Sports"
 ] as const;
 
 type ContactAttribute = (typeof CONTACT_ATTRIBUTE_VALUES)[number];

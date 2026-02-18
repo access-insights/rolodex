@@ -22,7 +22,8 @@ export type ContactAttribute =
   | "Consumer Products"
   | "Disability Services"
   | "Disability Community"
-  | "Investor";
+  | "Investor"
+  | "Adaptive Sports";
 
 export type ContactMethod = {
   id?: string;
