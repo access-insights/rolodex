@@ -76,12 +76,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const active = accounts[0];
         if (active) {
           const token = await loadAccountToken(active as unknown as { homeAccountId: string } & Record<string, unknown>);
-          setApiAuthToken(token);
-          setUser({
-            id: active.homeAccountId,
-            email: active.username,
-            role: toAppRole(active.idTokenClaims)
-          });
+          if (token) {
+            setApiAuthToken(token);
+            setUser({
+              id: active.homeAccountId,
+              email: active.username,
+              role: toAppRole(active.idTokenClaims)
+            });
+          } else {
+            setApiAuthToken(null);
+            setUser(null);
+          }
         }
       } finally {
         setIsLoading(false);

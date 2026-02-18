@@ -212,9 +212,13 @@ const verifyToken = async (event: HandlerEvent): Promise<AuthedContext> => {
     };
   }
 
-  const token = getBearerToken(event);
-  if (!token || !jwks || !env.azureIssuer || !env.azureAudience) {
+  if (!jwks || !env.azureIssuer || !env.azureAudience) {
     throw new Error("Missing authorization configuration");
+  }
+
+  const token = getBearerToken(event);
+  if (!token) {
+    throw new Error("Missing bearer token");
   }
 
   const allowedAudiences = [
