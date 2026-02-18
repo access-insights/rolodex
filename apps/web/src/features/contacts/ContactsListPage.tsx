@@ -181,15 +181,6 @@ export function ContactsListPage() {
             />
             <span>Include archived</span>
           </label>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              void loadContacts(activeSearch);
-            }}
-          >
-            Refresh list
-          </button>
         </section>
 
       </div>
