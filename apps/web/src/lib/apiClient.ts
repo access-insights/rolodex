@@ -138,15 +138,21 @@ export type ContactUpsertInput = {
 
 const apiBase = import.meta.env.VITE_API_BASE || "/api";
 let apiAuthToken: string | null = null;
+let apiAuthTokenProvider: ((forceRefresh?: boolean) => Promise<string | null>) | null = null;
 
 export const setApiAuthToken = (token: string | null) => {
   apiAuthToken = token;
 };
 
+export const setApiAuthTokenProvider = (provider: ((forceRefresh?: boolean) => Promise<string | null>) | null) => {
+  apiAuthTokenProvider = provider;
+};
+
 async function request<T>(
   action: string,
   init?: RequestInit,
-  query: Record<string, string> = {}
+  query: Record<string, string> = {},
+  didRetryForAuth = false
 ): Promise<ApiEnvelope<T>> {
   const url = new URL(apiBase, window.location.origin);
   url.searchParams.set("action", action);
@@ -154,16 +160,40 @@ async function request<T>(
     url.searchParams.set(key, value);
   });
 
+  let authToken = apiAuthToken;
+  if (apiAuthTokenProvider) {
+    const refreshed = await apiAuthTokenProvider(false);
+    if (refreshed) {
+      authToken = refreshed;
+      apiAuthToken = refreshed;
+    }
+  }
+
   const response = await fetch(url.pathname + url.search, {
     ...init,
     headers: {
       "content-type": "application/json",
-      ...(apiAuthToken ? { authorization: `Bearer ${apiAuthToken}` } : {}),
+      ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
       ...(init?.headers || {})
     }
   });
 
   const data = (await response.json()) as ApiEnvelope<T>;
+
+  if (
+    !didRetryForAuth &&
+    response.status === 401 &&
+    apiAuthTokenProvider &&
+    typeof data?.error?.message === "string" &&
+    data.error.message.toLowerCase().includes("exp")
+  ) {
+    const forced = await apiAuthTokenProvider(true);
+    if (forced) {
+      apiAuthToken = forced;
+      return request<T>(action, init, query, true);
+    }
+  }
+
   return data;
 }
 

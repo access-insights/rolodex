@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getMsalInstance } from "./msal";
-import { setApiAuthToken } from "../../lib/apiClient";
+import { setApiAuthToken, setApiAuthTokenProvider } from "../../lib/apiClient";
 
 export type AppRole = "admin" | "creator" | "participant";
 
@@ -35,14 +35,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadAccountToken = async (account: { homeAccountId: string } & Record<string, unknown>) => {
+    const loadAccountToken = async (account: { homeAccountId: string } & Record<string, unknown>, forceRefresh = false) => {
       const msalInstance = getMsalInstance();
       if (!msalInstance) return null;
 
       try {
         const tokenResult = await msalInstance.acquireTokenSilent({
           account: account as Parameters<typeof msalInstance.acquireTokenSilent>[0]["account"],
-          scopes: ["openid", "profile", "email"]
+          scopes: ["openid", "profile", "email"],
+          forceRefresh
         });
 
         return tokenResult.idToken || tokenResult.accessToken || null;
@@ -55,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const msalInstance = getMsalInstance();
       if (!msalInstance) {
         setApiAuthToken(null);
+        setApiAuthTokenProvider(null);
         setIsLoading(false);
         return;
       }
@@ -63,7 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await msalInstance.initialize();
         const redirectResult = await msalInstance.handleRedirectPromise();
         if (redirectResult?.account) {
-          setApiAuthToken(redirectResult.idToken || redirectResult.accessToken || null);
+          const token = redirectResult.idToken || redirectResult.accessToken || null;
+          setApiAuthToken(token);
+          setApiAuthTokenProvider(async (forceRefresh?: boolean) =>
+            loadAccountToken(
+              redirectResult.account as unknown as { homeAccountId: string } & Record<string, unknown>,
+              Boolean(forceRefresh)
+            )
+          );
           setUser({
             id: redirectResult.account.homeAccountId,
             email: redirectResult.account.username,
@@ -78,6 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const token = await loadAccountToken(active as unknown as { homeAccountId: string } & Record<string, unknown>);
           if (token) {
             setApiAuthToken(token);
+            setApiAuthTokenProvider(async (forceRefresh?: boolean) =>
+              loadAccountToken(active as unknown as { homeAccountId: string } & Record<string, unknown>, Boolean(forceRefresh))
+            );
             setUser({
               id: active.homeAccountId,
               email: active.username,
@@ -85,8 +97,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
           } else {
             setApiAuthToken(null);
+            setApiAuthTokenProvider(null);
             setUser(null);
           }
+        } else {
+          setApiAuthTokenProvider(null);
         }
       } finally {
         setIsLoading(false);
@@ -95,14 +110,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     bootstrap().catch(() => {
       setApiAuthToken(null);
+      setApiAuthTokenProvider(null);
       setIsLoading(false);
     });
+
+    return () => {
+      setApiAuthTokenProvider(null);
+    };
   }, []);
 
   const login = async () => {
     const msalInstance = getMsalInstance();
     if (!msalInstance || !import.meta.env.VITE_AZURE_CLIENT_ID) {
       setApiAuthToken(null);
+      setApiAuthTokenProvider(null);
       setUser({ id: "dev-user", email: "dev@example.com", role: FALLBACK_ROLE });
       return;
     }
@@ -115,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setApiAuthToken(null);
+    setApiAuthTokenProvider(null);
     setUser(null);
     const msalInstance = getMsalInstance();
     if (msalInstance && import.meta.env.VITE_AZURE_CLIENT_ID) {
