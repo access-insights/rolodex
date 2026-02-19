@@ -54,7 +54,9 @@ const attributeOptions: ContactAttribute[] = [
   "Disability Services",
   "Disability Community",
   "Investor",
-  "Adaptive Sports"
+  "Adaptive Sports",
+  "Accelerator",
+  "Governement"
 ];
 
 const phoneLabelOptions = ["Mobile", "Work", "Home", "Direct", "Assistant", "Other"];
@@ -99,6 +101,14 @@ const normalizeAttributes = (value: unknown): ContactAttribute[] => {
 };
 
 const normalizePersonName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+const contactMatchesPersonTerm = (firstName: string, lastName: string, term: string) => {
+  const normalizedTerm = normalizePersonName(term);
+  if (!normalizedTerm) return true;
+
+  const firstLast = normalizePersonName(`${firstName} ${lastName}`);
+  const lastFirst = normalizePersonName(`${lastName}, ${firstName}`);
+  return firstLast.includes(normalizedTerm) || lastFirst.includes(normalizedTerm);
+};
 const displayNameFromIdentity = (value?: string) => {
   if (!value) return "Unknown user";
   const source = value.includes("@") ? value.split("@")[0] : value;
@@ -324,7 +334,7 @@ export function ContactDetailPage() {
     if (!editing) return;
 
     const term = form?.referredBy.trim() ?? "";
-    if (!term) {
+    if (!term || form?.referredByContactId) {
       return;
     }
 
@@ -340,7 +350,7 @@ export function ContactDetailPage() {
 
           setReferredByMatches(
             result.data
-              .filter((contact) => contact.id !== id)
+              .filter((contact) => contact.id !== id && contactMatchesPersonTerm(contact.firstName, contact.lastName, term))
               .slice(0, 8)
               .map((contact) => ({ id: contact.id, firstName: contact.firstName, lastName: contact.lastName }))
           );
@@ -349,7 +359,7 @@ export function ContactDetailPage() {
     }, 200);
 
     return () => window.clearTimeout(timer);
-  }, [editing, form?.referredBy, id]);
+  }, [editing, form?.referredBy, form?.referredByContactId, id]);
 
   const refresh = async () => {
     if (!id) return;
@@ -707,6 +717,7 @@ export function ContactDetailPage() {
                           }
                         : prev
                     );
+                    setReferredByMatches([]);
                   });
                 }}
                 role="combobox"
@@ -714,36 +725,39 @@ export function ContactDetailPage() {
                 aria-expanded={referredByMatches.length > 0}
                 aria-controls="referred-by-suggestions"
               />
-              <div className="mt-2 rounded border border-border bg-canvas p-2">
-                {referredByLoading ? <p className="text-xs text-muted">Loading suggestions...</p> : null}
-                {!referredByLoading && referredByMatches.length === 0 && form.referredBy.trim() ? (
-                  <p className="text-xs text-muted">No matching contacts.</p>
-                ) : null}
-                {!referredByLoading && referredByMatches.length > 0 ? (
-                  <ul id="referred-by-suggestions" className="space-y-1" aria-label="Referred by suggestions">
-                    {referredByMatches.map((contact) => (
-                      <li key={contact.id}>
-                        <button
-                          type="button"
-                          className="nav-link w-full text-left"
-                          onClick={() =>
-                            setForm((prev) => {
-                              if (!prev) return prev;
-                              return {
-                                ...prev,
-                                referredBy: `${contact.firstName} ${contact.lastName}`,
-                                referredByContactId: contact.id
-                              };
-                            })
-                          }
-                        >
-                          {contact.lastName}, {contact.firstName}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
+              {!form.referredByContactId ? (
+                <div className="mt-2 rounded border border-border bg-canvas p-2">
+                  {referredByLoading ? <p className="text-xs text-muted">Loading suggestions...</p> : null}
+                  {!referredByLoading && referredByMatches.length === 0 && form.referredBy.trim() ? (
+                    <p className="text-xs text-muted">No matching contacts.</p>
+                  ) : null}
+                  {!referredByLoading && referredByMatches.length > 0 ? (
+                    <ul id="referred-by-suggestions" className="space-y-1" aria-label="Referred by suggestions">
+                      {referredByMatches.map((contact) => (
+                        <li key={contact.id}>
+                          <button
+                            type="button"
+                            className="nav-link w-full text-left"
+                            onClick={() => {
+                              setForm((prev) => {
+                                if (!prev) return prev;
+                                return {
+                                  ...prev,
+                                  referredBy: `${contact.firstName} ${contact.lastName}`,
+                                  referredByContactId: contact.id
+                                };
+                              });
+                              setReferredByMatches([]);
+                            }}
+                          >
+                            {contact.lastName}, {contact.firstName}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
             </label>
           </div>
         ) : (

@@ -19,6 +19,13 @@ Standard process for applying schema migrations and seed data for Rolodex.
 2. `db/002_rls.sql`
 3. `db/004_contact_extensions.sql`
 4. `db/005_contact_attributes_search.sql`
+5. `db/006_contact_addresses.sql`
+6. `db/007_contact_address_parts.sql`
+7. `db/008_drop_legacy_contact_address_columns.sql`
+8. `db/009_contact_attribute_investor.sql`
+9. `db/010_contact_attribute_adative_sports.sql`
+10. `db/011_rename_adative_to_adaptive_sports.sql`
+11. `db/012_contact_attributes_accelerator_governement.sql`
 
 Seed is applied separately:
 1. `db/003_seed.sql`
@@ -88,5 +95,5 @@ order by tablename, policyname;
 ## Change Management Rules
 - Never reorder existing migration files.
 - Never modify previously applied migrations in shared environments.
-- Add new migration files with next numeric prefix (for example `006_*.sql`).
+- Add new migration files with next numeric prefix (for example `013_*.sql`).
 - Keep seed data idempotent (`on conflict` patterns).

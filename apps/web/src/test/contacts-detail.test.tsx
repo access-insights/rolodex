@@ -5,7 +5,6 @@ import { ContactDetailPage } from "../features/contacts/ContactDetailPage";
 
 const mockGetContact = vi.fn();
 const mockAddComment = vi.fn();
-const mockGetHistory = vi.fn();
 const mockUpdateContact = vi.fn();
 const mockListContacts = vi.fn();
 
@@ -23,8 +22,6 @@ vi.mock("../lib/apiClient", () => ({
     getContact: (...args: unknown[]) => mockGetContact(...args),
     updateContact: (...args: unknown[]) => mockUpdateContact(...args),
     listContacts: (...args: unknown[]) => mockListContacts(...args),
-    importLinkedIn: vi.fn(),
-    getLinkedInHistory: (...args: unknown[]) => mockGetHistory(...args),
     addComment: (...args: unknown[]) => mockAddComment(...args),
     archiveComment: vi.fn(),
     deleteComment: vi.fn(),

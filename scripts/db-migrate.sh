@@ -25,6 +25,7 @@ MIGRATIONS=(
   "009_contact_attribute_investor.sql"
   "010_contact_attribute_adative_sports.sql"
   "011_rename_adative_to_adaptive_sports.sql"
+  "012_contact_attributes_accelerator_governement.sql"
 )
 
 for file in "${MIGRATIONS[@]}"; do

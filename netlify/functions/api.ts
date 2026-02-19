@@ -19,7 +19,9 @@ const CONTACT_ATTRIBUTE_VALUES = [
   "Disability Services",
   "Disability Community",
   "Investor",
-  "Adaptive Sports"
+  "Adaptive Sports",
+  "Accelerator",
+  "Governement"
 ] as const;
 
 type ContactAttribute = (typeof CONTACT_ATTRIBUTE_VALUES)[number];
@@ -757,19 +759,62 @@ const findDuplicateContact = async (
 };
 
 const parseCsvRows = (csvContent: string) => {
-  const lines = csvContent
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = "";
+  let inQuotes = false;
 
-  if (lines.length === 0) return [];
+  for (let i = 0; i < csvContent.length; i += 1) {
+    const char = csvContent[i];
+    const nextChar = csvContent[i + 1];
 
-  const headers = lines[0].split(",").map((header) => header.trim().toLowerCase());
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentCell += '"';
+        i += 1;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (!inQuotes && char === ",") {
+      currentRow.push(currentCell.trim());
+      currentCell = "";
+      continue;
+    }
+
+    if (!inQuotes && (char === "\n" || char === "\r")) {
+      if (char === "\r" && nextChar === "\n") {
+        i += 1;
+      }
+
+      currentRow.push(currentCell.trim());
+      if (currentRow.some((value) => value.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = "";
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  if (currentCell.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentCell.trim());
+    if (currentRow.some((value) => value.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  if (rows.length === 0) return [];
+
+  const headers = rows[0].map((header) => header.trim().toLowerCase());
   const hasHeaders = headers.includes("first_name") || headers.includes("firstname") || headers.includes("last_name") || headers.includes("lastname");
-  const dataLines = hasHeaders ? lines.slice(1) : lines;
+  const dataRows = hasHeaders ? rows.slice(1) : rows;
 
-  return dataLines.slice(0, 250).map((line) => {
-    const cells = line.split(",").map((cell) => cell.trim());
+  return dataRows.slice(0, 250).map((cells) => {
     const byHeader = (names: string[], fallbackIndex: number) => {
       const idx = names.map((name) => headers.indexOf(name)).find((index) => index >= 0);
       const pick = idx === undefined ? fallbackIndex : idx;

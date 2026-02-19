@@ -30,3 +30,7 @@ Local app URL: `http://localhost:8888`
 - `npm run db:seed` apply seed data to `SUPABASE_DB_URL`
 - `npm run db:setup` run migrations and seed in order
 - `npm run install:all` install root and workspace dependencies
+
+## Build artifacts
+- `apps/web/dist` is CI-generated build output and is ignored from source control.
+- Generate it with `npm run build` when needed locally.

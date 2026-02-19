@@ -23,7 +23,9 @@ const attributeOptions: ContactAttribute[] = [
   "Disability Services",
   "Disability Community",
   "Investor",
-  "Adaptive Sports"
+  "Adaptive Sports",
+  "Accelerator",
+  "Governement"
 ];
 
 const phoneLabelOptions = ["Mobile", "Work", "Home", "Direct", "Assistant", "Other"];
@@ -32,6 +34,14 @@ const websiteLabelOptions = ["Company", "LinkedIn", "Personal", "Portfolio", "Ot
 
 const emptyMethod = (): ContactMethod => ({ label: "", value: "" });
 const normalizePersonName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+const contactMatchesPersonTerm = (firstName: string, lastName: string, term: string) => {
+  const normalizedTerm = normalizePersonName(term);
+  if (!normalizedTerm) return true;
+
+  const firstLast = normalizePersonName(`${firstName} ${lastName}`);
+  const lastFirst = normalizePersonName(`${lastName}, ${firstName}`);
+  return firstLast.includes(normalizedTerm) || lastFirst.includes(normalizedTerm);
+};
 
 const formatPhoneNumber = (value: string) => {
   const digits = value.replace(/\D/g, "");
@@ -72,7 +82,7 @@ export function ContactCreatePage() {
 
   useEffect(() => {
     const term = referredByInput.trim();
-    if (!term) return;
+    if (!term || referredByContactId) return;
 
     const timer = window.setTimeout(() => {
       setReferredByLoading(true);
@@ -83,13 +93,18 @@ export function ContactCreatePage() {
             setReferredByMatches([]);
             return;
           }
-          setReferredByMatches(result.data.slice(0, 8).map((contact) => ({ id: contact.id, firstName: contact.firstName, lastName: contact.lastName })));
+          setReferredByMatches(
+            result.data
+              .filter((contact) => contactMatchesPersonTerm(contact.firstName, contact.lastName, term))
+              .slice(0, 8)
+              .map((contact) => ({ id: contact.id, firstName: contact.firstName, lastName: contact.lastName }))
+          );
         })
         .finally(() => setReferredByLoading(false));
     }, 200);
 
     return () => window.clearTimeout(timer);
-  }, [referredByInput]);
+  }, [referredByInput, referredByContactId]);
 
   const resolveReferredByContact = async (input: string) => {
     const trimmed = input.trim();
@@ -198,6 +213,7 @@ export function ContactCreatePage() {
         resolvedReferredByContactId = resolution.contact.id;
         setReferredByInput(resolvedReferredBy);
         setReferredByContactId(resolvedReferredByContactId);
+        setReferredByMatches([]);
       }
     }
 
@@ -314,30 +330,33 @@ export function ContactCreatePage() {
               aria-expanded={referredByMatches.length > 0}
               aria-controls="create-referred-by-suggestions"
             />
-            <div className="mt-2 rounded border border-border bg-canvas p-2">
-              {referredByLoading ? <p className="text-xs text-muted">Loading suggestions...</p> : null}
-              {!referredByLoading && referredByMatches.length === 0 && referredByInput.trim() ? (
-                <p className="text-xs text-muted">No matching contacts.</p>
-              ) : null}
-              {!referredByLoading && referredByMatches.length > 0 ? (
-                <ul id="create-referred-by-suggestions" className="space-y-1" aria-label="Referred by suggestions">
-                  {referredByMatches.map((contact) => (
-                    <li key={contact.id}>
-                      <button
-                        type="button"
-                        className="nav-link w-full text-left"
-                        onClick={() => {
-                          setReferredByInput(`${contact.firstName} ${contact.lastName}`);
-                          setReferredByContactId(contact.id);
-                        }}
-                      >
-                        {contact.lastName}, {contact.firstName}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
+            {!referredByContactId ? (
+              <div className="mt-2 rounded border border-border bg-canvas p-2">
+                {referredByLoading ? <p className="text-xs text-muted">Loading suggestions...</p> : null}
+                {!referredByLoading && referredByMatches.length === 0 && referredByInput.trim() ? (
+                  <p className="text-xs text-muted">No matching contacts.</p>
+                ) : null}
+                {!referredByLoading && referredByMatches.length > 0 ? (
+                  <ul id="create-referred-by-suggestions" className="space-y-1" aria-label="Referred by suggestions">
+                    {referredByMatches.map((contact) => (
+                      <li key={contact.id}>
+                        <button
+                          type="button"
+                          className="nav-link w-full text-left"
+                          onClick={() => {
+                            setReferredByInput(`${contact.firstName} ${contact.lastName}`);
+                            setReferredByContactId(contact.id);
+                            setReferredByMatches([]);
+                          }}
+                        >
+                          {contact.lastName}, {contact.firstName}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
           </label>
         </div>
 

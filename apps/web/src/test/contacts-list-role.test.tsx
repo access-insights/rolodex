@@ -17,7 +17,6 @@ vi.mock("../features/auth/AuthContext", () => ({
 vi.mock("../lib/apiClient", () => ({
   apiClient: {
     listContacts: (...args: unknown[]) => mockListContacts(...args),
-    importLinkedIn: vi.fn(),
     importCsv: vi.fn(),
     deleteContact: vi.fn()
   }
