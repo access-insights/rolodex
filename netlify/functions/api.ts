@@ -3,7 +3,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 import { z } from "zod";
-import { authenticateAssistant, assistantActions, saveBusinessContact, AssistantError } from "./lib/assistant";
+import { authenticateAssistant, assistantActions, assistantOrganization, saveBusinessContact, AssistantError } from "./lib/assistant";
 
 type Role = "admin" | "creator" | "participant";
 type ContactType = "Advisor" | "Funder" | "Partner" | "Client" | "General";
@@ -853,7 +853,10 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
       case "assistant.save": {
         requireRole(ctx,["creator","admin"]);
         const result=await saveBusinessContact(client,ctx,parseBody(event),{
-          actor:()=>getActorUserId(client,ctx),detail:(id)=>loadContactDetail(client,ctx.orgId,id),
+          actor:async()=>{
+            const actor=await client.query<{id:string}>("select id from users where organization_id=$1 and subject=$2 and role='creator'",[ctx.orgId,ctx.userId]);
+            return actor.rows[0]?.id || null;
+          },detail:(id)=>loadContactDetail(client,ctx.orgId,id),
           audit:(id,metadata)=>writeAuditLog(client,ctx,{action:"assistant.contact.save",entityType:"contacts",entityId:id,metadata})
         });
         return json(200,{ok:true,data:result});
@@ -1488,8 +1491,8 @@ export const handler: Handler = async (event) => {
     let authCtx:AuthedContext;
     if(assistantActions.has(action)){
       authenticateAssistant(event,process.env.MY_DAY_INTEGRATION_SECRET);
-      if(!isUuid(env.defaultOrgId))throw new Error("Missing authorization organization");
-      authCtx={userId:"integration:my-day",email:"darryl.adams@accessinsights.net",role:"creator",orgId:env.defaultOrgId,token:{}};
+      const organization=assistantOrganization(env.defaultOrgId,process.env.MY_DAY_ORG_ID,process.env.AZURE_TENANT_ID || process.env.VITE_AZURE_TENANT_ID);
+      authCtx={userId:"integration:my-day",email:"darryl.adams@accessinsights.net",role:"creator",orgId:organization,token:{}};
       if(action==="assistant.search"){
         const {query}=z.object({query:z.string().trim().min(2).max(240)}).strict().parse(parseBody(event));
         return await handleAction({...event,queryStringParameters:{action:"contact.list",search:query}},authCtx,"contact.list");
