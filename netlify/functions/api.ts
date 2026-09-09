@@ -853,7 +853,10 @@ const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: str
       case "assistant.save": {
         requireRole(ctx,["creator","admin"]);
         const result=await saveBusinessContact(client,ctx,parseBody(event),{
-          actor:()=>getActorUserId(client,ctx),detail:(id)=>loadContactDetail(client,ctx.orgId,id),
+          actor:async()=>{
+            const actor=await client.query<{id:string}>("select id from users where organization_id=$1 and subject=$2 and role='creator'",[ctx.orgId,ctx.userId]);
+            return actor.rows[0]?.id || null;
+          },detail:(id)=>loadContactDetail(client,ctx.orgId,id),
           audit:(id,metadata)=>writeAuditLog(client,ctx,{action:"assistant.contact.save",entityType:"contacts",entityId:id,metadata})
         });
         return json(200,{ok:true,data:result});
