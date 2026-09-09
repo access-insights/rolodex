@@ -1,8 +1,9 @@
 import type { Handler, HandlerEvent } from "@netlify/functions";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
 import { z } from "zod";
+import { authenticateAssistant, assistantActions, saveBusinessContact, AssistantError } from "./lib/assistant";
 
 type Role = "admin" | "creator" | "participant";
 type ContactType = "Advisor" | "Funder" | "Partner" | "Client" | "General";
@@ -836,6 +837,27 @@ const parseCsvRows = (csvContent: string) => {
 const handleAction = async (event: HandlerEvent, ctx: AuthedContext, action: string) => {
   return withRlsContext(ctx, async (client) => {
     switch (action) {
+      case "assistant.status": {
+        const actor=await client.query("select id from users where organization_id=$1 and subject=$2 and role='creator'",[ctx.orgId,ctx.userId]);
+        const address=new URL(env.supabaseDbUrl!);
+        const databaseIdentity=createHash("sha256").update(address.host+address.username+address.pathname).digest("hex");
+        return json(200,{ok:true,data:{connected:true,actorProvisioned:actor.rowCount===1,scope:"business_contacts",writes:"explicit_owner_request",orgId:ctx.orgId,databaseIdentity}});
+      }
+      case "assistant.get": {
+        const {id}=z.object({id:z.string().uuid()}).strict().parse(parseBody(event));
+        const detail=await loadContactDetail(client,ctx.orgId,id);
+        if(!detail)return json(404,{ok:false,error:{code:"NOT_FOUND",message:"Contact not found"}});
+        const version=await client.query<{version:string}>("select updated_at::text as version from contacts where organization_id=$1 and unique_id=$2",[ctx.orgId,id]);
+        return json(200,{ok:true,data:{contact:detail,version:version.rows[0].version}});
+      }
+      case "assistant.save": {
+        requireRole(ctx,["creator","admin"]);
+        const result=await saveBusinessContact(client,ctx,parseBody(event),{
+          actor:()=>getActorUserId(client,ctx),detail:(id)=>loadContactDetail(client,ctx.orgId,id),
+          audit:(id,metadata)=>writeAuditLog(client,ctx,{action:"assistant.contact.save",entityType:"contacts",entityId:id,metadata})
+        });
+        return json(200,{ok:true,data:result});
+      }
       case "me": {
         const me = await client.query<DbUser>(
           `
@@ -1463,9 +1485,23 @@ export const handler: Handler = async (event) => {
       return json(400, { ok: false, error: { code: "BAD_REQUEST", message: "Missing action parameter" } });
     }
 
-    const authCtx = await verifyToken(event);
+    let authCtx:AuthedContext;
+    if(assistantActions.has(action)){
+      authenticateAssistant(event,process.env.MY_DAY_INTEGRATION_SECRET);
+      if(!isUuid(env.defaultOrgId))throw new Error("Missing authorization organization");
+      authCtx={userId:"integration:my-day",email:"darryl.adams@accessinsights.net",role:"creator",orgId:env.defaultOrgId,token:{}};
+      if(action==="assistant.search"){
+        const {query}=z.object({query:z.string().trim().min(2).max(240)}).strict().parse(parseBody(event));
+        return await handleAction({...event,queryStringParameters:{action:"contact.list",search:query}},authCtx,"contact.list");
+      }
+    }else{
+      // Signed integration requests must never be accepted as legacy JWT requests.
+      if(event.headers["x-my-day-signature"])throw new Error("Invalid authorization action");
+      authCtx=await verifyToken(event);
+    }
     return await handleAction(event, authCtx, action);
   } catch (error) {
+    if(error instanceof AssistantError)return json(error.status,{ok:false,error:{code:"ASSISTANT_CONFLICT",message:error.message},meta:{details:error.details}});
     if (error instanceof z.ZodError) {
       return json(400, { ok: false, error: { code: "VALIDATION_ERROR", message: error.message } });
     }
