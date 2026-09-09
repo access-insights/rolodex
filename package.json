@@ -16,6 +16,7 @@
     "lint": "npm run lint --workspace apps/web && npm run lint:functions",
     "lint:functions": "tsc -p tsconfig.functions.json --noEmit",
     "test": "npm run test --workspace apps/web",
+    "test:assistant": "tsc -p tsconfig.functions.json && node --test tests/assistant.test.cjs",
     "test:a11y": "npm run test:a11y --workspace apps/web",
     "test:e2e": "playwright test",
     "db:migrate": "bash scripts/db-migrate.sh",
