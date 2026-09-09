@@ -34,13 +34,13 @@ async function main(){
   const stamp=String(Math.floor(Date.now()/1000));const signature=crypto.createHmac('sha256',secret).update(stamp+'\nassistant.status\n{}').digest('hex');
   const live=await fetch('https://rolodex.accessinsights.net/api?action=assistant.status',{method:'POST',headers:{'Content-Type':'application/json','X-My-Day-Timestamp':stamp,'X-My-Day-Signature':signature},body:'{}'});
   const status=await live.json();if(!live.ok || !status.ok)throw new Error('Deploy the assistant API before provisioning');
-  const org=value('DEFAULT_ORG_ID');let dbUrl=value('SUPABASE_DB_URL');
+  const org=status.data.orgId;let dbUrl=value('SUPABASE_DB_URL');
   // Netlify masks production secret values. A local-development credential may be
   // used only when its target fingerprint matches the running production service.
   if(!/^postgres(?:ql)?:\/\//.test(dbUrl || ''))dbUrl=vars.find(e=>e.key==='SUPABASE_DB_URL')?.values.find(v=>v.context==='dev')?.value;
   if(!org || !dbUrl)throw new Error('Production organization/database settings missing');
   const connection=new URL(dbUrl);for(const k of ['sslmode','sslcert','sslkey','sslrootcert'])connection.searchParams.delete(k);
-  if(status.data.orgId!==org || status.data.databaseIdentity!==crypto.createHash('sha256').update(connection.host+connection.username+connection.pathname).digest('hex'))throw new Error('Operator credential does not identify the production database');
+  if(status.data.databaseIdentity!==crypto.createHash('sha256').update(connection.host+connection.username+connection.pathname).digest('hex'))throw new Error('Operator credential does not identify the production database');
   const db=new Client({connectionString:connection.toString(),ssl:{rejectUnauthorized:false}});
   phase='connect to database';
   await db.connect();

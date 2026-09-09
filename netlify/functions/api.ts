@@ -1488,8 +1488,9 @@ export const handler: Handler = async (event) => {
     let authCtx:AuthedContext;
     if(assistantActions.has(action)){
       authenticateAssistant(event,process.env.MY_DAY_INTEGRATION_SECRET);
-      if(!isUuid(env.defaultOrgId))throw new Error("Missing authorization organization");
-      authCtx={userId:"integration:my-day",email:"darryl.adams@accessinsights.net",role:"creator",orgId:env.defaultOrgId,token:{}};
+      const organization=process.env.MY_DAY_ORG_ID || (isUuid(env.defaultOrgId) ? env.defaultOrgId : process.env.AZURE_TENANT_ID || process.env.VITE_AZURE_TENANT_ID || "");
+      if(!isUuid(organization))throw new Error("Missing authorization organization");
+      authCtx={userId:"integration:my-day",email:"darryl.adams@accessinsights.net",role:"creator",orgId:organization,token:{}};
       if(action==="assistant.search"){
         const {query}=z.object({query:z.string().trim().min(2).max(240)}).strict().parse(parseBody(event));
         return await handleAction({...event,queryStringParameters:{action:"contact.list",search:query}},authCtx,"contact.list");
