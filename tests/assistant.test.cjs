@@ -3,7 +3,14 @@ const assert=require('node:assert/strict');
 const {createHmac,randomUUID}=require('node:crypto');
 const {readFileSync,readdirSync}=require('node:fs');
 const {Pool}=require('pg');
-const {authenticateAssistant,saveBusinessContact,saveSchema}=require('../dist-functions/lib/assistant.js');
+const {authenticateAssistant,assistantOrganization,saveBusinessContact,saveSchema}=require('../dist-functions/lib/assistant.js');
+test('organization mirrors valid default or configured tenant and fails closed on bad overrides',()=>{
+  const tenant=randomUUID(),override=randomUUID();
+  assert.equal(assistantOrganization('11111111-1111-1111-1111-111111111111',undefined,tenant),tenant);
+  assert.equal(assistantOrganization(tenant,override,undefined),override);
+  assert.throws(()=>assistantOrganization('',undefined,undefined));
+  assert.throws(()=>assistantOrganization(tenant,'bad-override',tenant));
+});
 const secret='x'.repeat(64);
 function signed(action='assistant.status',body='{}',stamp=String(Math.floor(Date.now()/1000))){return {httpMethod:'POST',headers:{'x-my-day-timestamp':stamp,'x-my-day-signature':createHmac('sha256',secret).update(`${stamp}\n${action}\n${body}`).digest('hex')},queryStringParameters:{action},body};}
 test('signature binds body, action and freshness; legacy writes cannot use integration identity',()=>{

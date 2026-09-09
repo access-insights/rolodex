@@ -4,6 +4,12 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 
 export const assistantActions = new Set(["assistant.search", "assistant.get", "assistant.save", "assistant.status"]);
+export function assistantOrganization(defaultOrg:string,override:string|undefined,tenant:string|undefined){
+  const valid=(s:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+  const organization=override || (valid(defaultOrg) ? defaultOrg : tenant || "");
+  if(!valid(organization))throw new Error("Missing authorization organization");
+  return organization;
+}
 
 // Separate server credential: it never grants access to legacy/admin/export routes.
 export function authenticateAssistant(event: HandlerEvent, secret: string | undefined, now = Date.now()) {
