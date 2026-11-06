@@ -1,10 +1,11 @@
 import { PublicClientApplication } from "@azure/msal-browser";
+import { resolveAuthRedirectUri } from "./redirectUri";
 
 const clientId = import.meta.env.VITE_AZURE_CLIENT_ID || "";
 const tenantId = import.meta.env.VITE_AZURE_TENANT_ID || "common";
 const configuredRedirectUri = import.meta.env.VITE_AZURE_REDIRECT_URI || "";
-const redirectUri = configuredRedirectUri || `${window.location.origin}/login`;
-const postLogoutRedirectUri = import.meta.env.VITE_AZURE_POST_LOGOUT_REDIRECT_URI || `${window.location.origin}/login`;
+const redirectUri = resolveAuthRedirectUri(window.location.origin, configuredRedirectUri);
+const postLogoutRedirectUri = resolveAuthRedirectUri(window.location.origin, import.meta.env.VITE_AZURE_POST_LOGOUT_REDIRECT_URI);
 
 let msalInstance: PublicClientApplication | null = null;
 

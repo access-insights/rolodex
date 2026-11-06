@@ -133,8 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     await msalInstance.loginRedirect({
-      scopes: ["openid", "profile", "email"],
-      redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || `${window.location.origin}/login`
+      scopes: ["openid", "profile", "email"]
     });
   };
 
