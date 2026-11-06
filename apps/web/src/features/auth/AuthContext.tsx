@@ -13,6 +13,7 @@ type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
+  authError: string | null;
   login: () => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -33,6 +34,7 @@ const toAppRole = (claims: unknown): AppRole => {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadAccountToken = async (account: { homeAccountId: string } & Record<string, unknown>, forceRefresh = false) => {
@@ -109,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     bootstrap().catch(() => {
+      setAuthError("Microsoft sign-in could not be completed. Try again with your assigned work account. If it still fails, ask your administrator to check Rolodex assignments and consent in Microsoft Entra.");
       setApiAuthToken(null);
       setApiAuthTokenProvider(null);
       setIsLoading(false);
@@ -120,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async () => {
+    setAuthError(null);
     const msalInstance = getMsalInstance();
     if (!msalInstance || !import.meta.env.VITE_AZURE_CLIENT_ID) {
       setApiAuthToken(null);
@@ -129,8 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     await msalInstance.loginRedirect({
-      scopes: ["openid", "profile", "email"],
-      redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || `${window.location.origin}/login`
+      scopes: ["openid", "profile", "email"]
     });
   };
 
@@ -144,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value = useMemo<AuthContextValue>(() => ({ user, isLoading, login, logout }), [user, isLoading]);
+  const value = useMemo<AuthContextValue>(() => ({ user, isLoading, authError, login, logout }), [user, isLoading, authError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

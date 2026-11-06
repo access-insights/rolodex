@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
@@ -7,7 +7,25 @@ type LocationState = {
 };
 
 export function LoginPage() {
-  const { login, user } = useAuth();
+  const { login, user, isLoading, authError } = useAuth();
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const loginInProgress = useRef(false);
+
+  const handleLogin = async () => {
+    if (loginInProgress.current || isLoading) return;
+    loginInProgress.current = true;
+    setIsSigningIn(true);
+    setLoginError(null);
+    try {
+      await login();
+    } catch {
+      setLoginError("Unable to start Microsoft sign-in. Please try again. If the problem continues, contact your administrator.");
+    } finally {
+      loginInProgress.current = false;
+      setIsSigningIn(false);
+    }
+  };
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as LocationState | null;
@@ -25,9 +43,10 @@ export function LoginPage() {
         <h1 id="login-title" className="text-4xl font-semibold tracking-tight">
           Rolodex
         </h1>
-        <button className="btn mt-8 w-full" onClick={() => void login()}>
-          Login
+        <button className="btn mt-8 w-full" disabled={isLoading || isSigningIn} onClick={() => void handleLogin()}>
+          {isSigningIn ? "Signing in..." : "Login"}
         </button>
+        {(loginError || authError) && <p role="alert" className="mt-4">{loginError || authError}</p>}
       </div>
     </section>
   );

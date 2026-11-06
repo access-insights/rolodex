@@ -23,3 +23,9 @@ Set these values in Netlify site settings:
 - `DEFAULT_ORG_ID` is a UUID and the row exists in `organizations`.
 - If any environment falls back to Azure `tid` for org context, that `organizations.id` row exists too.
 - Netlify redirects are deployed with `netlify.toml`.
+
+## Authentication callback origins
+- Register https://rolodex.accessinsights.net/login as a Single-page application redirect URI in rolodex-web before deploying the custom-domain login fix.
+- Keep https://ai-rolodex.netlify.app/login registered while the Netlify hostname is supported.
+- Login and logout callbacks must stay on the initiating origin because MSAL transaction state uses origin-scoped sessionStorage. Cross-origin configured callbacks now fall back to the current origin's /login path.
+- Verify a fresh tab opened on each supported hostname reaches Contacts after one Login click. Do not copy callback URL fragments into logs or reports.
